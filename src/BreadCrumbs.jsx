@@ -889,12 +889,14 @@ function StepLocation({data,setData,onNext}){
 function StepIncome({data,setData,onNext,onBack}){
   const d=data;
   const grossMo=Math.round(d.income/12);
+  const alimonyMo=Math.round((d.alimony||0)/12);
   const taxSav=calcTax(d.income,0)-calcTax(d.income,d.k401+d.hsa);
   return(
     <div>
       <Card>
         <SecTitle>Income</SecTitle>
-        <Slider label="Annual gross income" min={30000} max={250000} step={1000} value={d.income} onChange={v=>setData({...d,income:v})} display={fmtK(d.income)+"/yr"} note={fmt(grossMo)+"/mo gross"}/>
+        <Slider label="Annual gross income" min={30000} max={700000} step={1000} value={d.income} onChange={v=>setData({...d,income:v})} display={fmtK(d.income)+"/yr"} note={fmt(grossMo)+"/mo gross"}/>
+        <Slider label="Alimony received" min={0} max={700000} step={500} value={d.alimony||0} onChange={v=>setData({...d,alimony:v})} display={fmtK(d.alimony||0)+"/yr"} note={alimonyMo>0?fmt(alimonyMo)+"/mo · counts toward qualifying income":"Optional — add if you receive alimony"}/>
       </Card>
       <Card>
         <SecTitle>Retirement contributions</SecTitle>
@@ -962,13 +964,18 @@ function StepHome({data,setData,onNext,onBack}){
       </Card>
       <Card>
         <SecTitle>Affordability ranges</SecTitle>
-        {[{l:"Conservative (2.5–3×)",max:d.income*3,col:C.green},{l:"Comfortable (3–4×)",max:d.income*4,col:C.greenMid},{l:"Stretch (4–5×)",max:d.income*5,col:C.amber}].map(t=>(
-          <div key={t.l} style={{marginBottom:8}}>
+        {[
+          {l:"Conservative (2.5–3×)",max:d.income*3,col:C.green,desc:"A safe budget that leaves plenty of room for savings, travel, and unexpected expenses without stretching your monthly income."},
+          {l:"Comfortable (3–4×)",max:d.income*4,col:C.greenMid,desc:"The standard benchmark for most buyers. Covers your housing costs reliably while maintaining a balanced lifestyle."},
+          {l:"Stretch (4–5×)",max:d.income*5,col:C.amber,desc:"Aggressive territory. This requires a tighter budget elsewhere and leaves less breathing room for other financial goals."},
+        ].map(t=>(
+          <div key={t.l} style={{marginBottom:12}}>
             <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:3}}>
               <span style={{color:C.gray700}}>{t.l}</span>
               <span style={{fontWeight:700}}>up to {fmt(t.max)}</span>
             </div>
             <PBar value={Math.min(d.price,t.max)} max={t.max} color={d.price<=t.max?t.col:C.red}/>
+            <div style={{fontSize:10,color:C.gray500,marginTop:4,lineHeight:1.5}}>{t.desc}</div>
           </div>
         ))}
       </Card>
@@ -1274,7 +1281,8 @@ function StepResults({data,onBack,onNext,onRestart}){
   const utils=240,hoa=d.price<280000?0:d.price<340000?55:d.price<400000?120:175,maint=Math.round(d.price*.01/12);
   const housing=piti+utils+hoa+maint;
   const mccMo=d.programs.some(p=>p.includes("mcc"))?Math.round(piMo*12*.15/12):0;
-  const personal=d.groc+d.dining+d.ent+d.pcare+d.car+d.debts+d.efund;
+  const currentRent=d.isRenting?(d.monthlyRent||0):0;
+  const personal=d.groc+d.dining+d.ent+d.pcare+d.car+d.debts+d.efund+currentRent;
   const remaining=trueTakeHome-housing-personal+mccMo;
   const bufCol=remaining>=500?C.green:remaining>=100?"#92400E":C.red;
   const fe=Math.round(piti/grossMo*100),be=Math.round((piti+d.debts)/grossMo*100);
@@ -1544,7 +1552,7 @@ function StepResults({data,onBack,onNext,onRestart}){
           <div style={{display:"flex",justifyContent:"space-between",padding:"7px 0 12px",borderTop:`1px solid ${C.gray300}`,marginTop:4,fontSize:14,fontWeight:900,color:C.green}}>
             <span>True spendable take-home</span><span>{fmt(trueTakeHome)}/mo</span>
           </div>
-          {[[`P&I (${fmt(effLoan)} @ ${ar.toFixed(2)}%)`,piMo],["Property tax (2.2%)",txMo],["Insurance (1.2%)",insMo],["PMI / MIP",miMo],["Utilities (est.)",utils],["HOA + Maintenance",hoa+maint],["Groceries",d.groc],["Dining out",d.dining],["Entertainment",d.ent],["Personal care",d.pcare],["Car",d.car],["Other debts",d.debts],["Emergency fund",d.efund],["Retirement (all)",k401mo+rothmo+hsamo]].filter(r=>r[1]>0).map((r,i)=>(
+          {[[`P&I (${fmt(effLoan)} @ ${ar.toFixed(2)}%)`,piMo],["Property tax (2.2%)",txMo],["Insurance (1.2%)",insMo],["PMI / MIP",miMo],["Utilities (est.)",utils],["HOA + Maintenance",hoa+maint],["Groceries",d.groc],["Dining out",d.dining],["Entertainment",d.ent],["Personal care",d.pcare],["Car",d.car],["Other debts",d.debts],["Emergency fund",d.efund],["Retirement (all)",k401mo+rothmo+hsamo],d.isRenting?["Current rent (while renting)",currentRent]:null].filter(r=>r&&r[1]>0).map((r,i)=>(
             <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"3px 0",borderBottom:`0.5px solid ${C.gray100}`,fontSize:12}}>
               <span style={{color:C.gray700}}>{r[0]}</span><span style={{fontWeight:600}}>{fmt(r[1])}/mo</span>
             </div>
@@ -1788,7 +1796,7 @@ const STEPS=[
 
 const DEFAULT={
   zip:"",locationInfo:null,isFirstTime:true,
-  income:86000,score:740,dpPct:5,debts:300,isVet:false,profession:"none",monthlyRent:1500,isRenting:true,
+  income:86000,alimony:0,score:740,dpPct:5,debts:300,isVet:false,profession:"none",monthlyRent:1500,isRenting:true,
   k401:3000,roth:1000,hsa:0,
   price:340000,loanType:"fha",
   programs:["tsahc","mcc_tx"],
