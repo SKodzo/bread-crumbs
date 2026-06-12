@@ -848,12 +848,12 @@ function StepLocation({data,setData,onNext}){
       <Card>
         <SecTitle>Where are you buying?</SecTitle>
         <p style={{fontSize:13,color:C.gray700,marginBottom:12,lineHeight:1.6}}>Enter your target zip code to unlock every assistance program, crime rating, climate risk, and neighborhood guide for your area.</p>
-        <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:12}}>
+        <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
           <input value={zip} onChange={e=>{setZip(e.target.value);if(e.target.value.length===5)lookup(e.target.value);}}
             placeholder="e.g. 77004" maxLength={5}
-            style={{flex:"1 1 160px",minWidth:0,fontSize:20,fontWeight:700,padding:"12px 14px",border:`2px solid ${status==="found"?C.green:status==="invalid"?C.red:C.gray300}`,borderRadius:12,outline:"none",letterSpacing:"0.12em",textAlign:"center"}}/>
+            style={{width:"100%",boxSizing:"border-box",fontSize:20,fontWeight:700,padding:"12px 14px",border:`2px solid ${status==="found"?C.green:status==="invalid"?C.red:C.gray300}`,borderRadius:12,outline:"none",letterSpacing:"0.12em",textAlign:"center"}}/>
           <button onClick={()=>lookup(zip)}
-            style={{flex:"0 0 auto",padding:"12px 18px",background:C.green,color:C.white,border:"none",borderRadius:12,fontSize:14,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
+            style={{width:"100%",padding:"13px",background:C.green,color:C.white,border:"none",borderRadius:12,fontSize:15,fontWeight:700,cursor:"pointer"}}>
             {loading?"...":"Look up"}
           </button>
         </div>
@@ -925,7 +925,7 @@ function StepIncome({data,setData,onNext,onBack}){
             </div>
           ))}
         </div>
-        {d.profession!=="none"&&<Alert type="success" style={{marginTop:8}}>Great — we'll show profession-specific programs on the next steps.</Alert>}
+        {d.profession!=="none"&&<Alert type="success" style={{marginTop:8}}>Great — we will show profession-specific programs on the next steps.</Alert>}
       </Card>
       <Card>
         <SecTitle>Credit profile</SecTitle>
