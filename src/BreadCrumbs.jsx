@@ -853,7 +853,7 @@ function StepLocation({data,setData,onNext}){
             placeholder="e.g. 77004" maxLength={5}
             style={{flex:1,fontSize:20,fontWeight:700,padding:"12px 14px",border:`2px solid ${status==="found"?C.green:status==="invalid"?C.red:C.gray300}`,borderRadius:12,outline:"none",letterSpacing:"0.12em",textAlign:"center"}}/>
           <button onClick={()=>lookup(zip)}
-            style={{padding:"12px 18px",background:C.green,color:C.white,border:"none",borderRadius:12,fontSize:14,fontWeight:700,cursor:"pointer"}}>
+            style={{padding:"12px 18px",background:C.green,color:C.white,border:"none",borderRadius:12,fontSize:14,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>
             {loading?"...":"Look up"}
           </button>
         </div>
