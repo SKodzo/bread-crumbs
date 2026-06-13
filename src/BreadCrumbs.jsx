@@ -1758,6 +1758,84 @@ function StepResults({data,onBack,onNext,onRestart}){
       nl(6);
     });
 
+    // ════════════════════════════════════════════════════════════════════════
+    // NEGOTIATION GUIDE
+    // ════════════════════════════════════════════════════════════════════════
+    sectionHead("Negotiation Guide","");
+    wrap("Everything below is negotiable — most buyers leave money on the table by not asking. Your agent works for you; these are the levers you control.",M,y,CW,8.5,G7,"normal",4);
+    nl(12);
+
+    const negSections=[
+      {title:"Purchase Price",items:[
+        "List price is a starting point, not the final number. Comparable sales (comps) determine market value.",
+        "In a buyer's market: offer 3–8% below list. In a hot market: offer at or above list.",
+        `At ${fmt(d.price)} list, a 3% reduction saves you ${fmt(d.price*.03)} upfront.`,
+        "Ask your agent to pull comps from the past 90 days within a 0.5-mile radius before writing any offer.",
+      ]},
+      {title:"Seller Concessions (Closing Costs)",items:[
+        "You can ask the seller to pay some or all of your closing costs — called a seller concession.",
+        `Closing costs on a ${fmt(d.price)} home run ~${fmt(d.price*.03)}. Asking for 2–3% concession is common.`,
+        "FHA allows up to 6% in seller concessions. Conventional allows up to 3% (under 10% down) or 9% (10%+ down).",
+        "Framing it as 'net price' works better than asking for a discount — seller nets the same, you get cash at closing.",
+      ]},
+      {title:"Repairs After Inspection",items:[
+        "After the inspection, you can request repairs, a price reduction, or a repair credit at closing.",
+        "Repair credits are often better — you control the contractor and the quality of work.",
+        "Focus on health/safety issues (roof, electrical, plumbing, HVAC) — not cosmetic items.",
+        "If the seller won't budge on repairs, factor the repair cost into your offer price.",
+      ]},
+      {title:"Closing Date & Possession",items:[
+        "Sellers often value a flexible closing date as much as a higher price.",
+        "If a seller needs more time, offer a leaseback — they rent from you post-closing.",
+        "If you need speed, a 21-day close can beat a higher offer from a buyer needing 45 days.",
+        "If the seller wants 30–60 days post-close possession, charge fair market rent.",
+      ]},
+      {title:"Home Warranty",items:[
+        "Ask the seller to provide a 1-year home warranty ($400–700). Low cost to them, high value to you.",
+        "Covers HVAC, plumbing, electrical, and appliances for the first year — when surprises are most likely.",
+        "If they decline, ask your agent to cover it as a buyer's closing gift — many do.",
+      ]},
+      {title:"Appliances & Fixtures",items:[
+        "Permanently attached items (built-in appliances, light fixtures, blinds) convey with the home by default.",
+        "Freestanding appliances (washer, dryer, fridge) do NOT transfer unless you ask.",
+        "Ask for everything you want in writing in the contract. Verbal agreements don't hold.",
+        "If the seller won't leave the fridge, ask for a $500–800 appliance credit instead.",
+      ]},
+      {title:"Earnest Money Deposit",items:[
+        "Earnest money (1–3% of price) shows commitment. The amount is negotiable.",
+        "Make sure your contract has strong contingencies: financing, inspection, and appraisal.",
+        "An appraisal contingency protects you if the home appraises below purchase price.",
+        "In a competitive market, a larger EMD (3%+) signals seriousness without raising your offer price.",
+      ]},
+      {title:"Rate Buydown (Seller-Paid Points)",items:[
+        "Ask the seller to pay points to permanently or temporarily buy down your interest rate.",
+        `At ${ar.toFixed(2)}%, buying down 0.5% costs ~${fmt(d.price*.01)} and saves ~${fmt(Math.round(mpi(effLoan,ar-.5,360)-mpi(effLoan,ar,360)))}/mo for the life of the loan.`,
+        "A 2-1 buydown costs ~2–3% of the loan — sellers sometimes pay this to close a deal.",
+        "Most powerful in a high-rate environment where buyers are rate-sensitive.",
+      ]},
+      {title:"HOA & Transfer Fees",items:[
+        "HOA transfer fees ($200–500+) are negotiable — ask the seller to pay them.",
+        "Review the HOA's financials and reserve fund before closing. Underfunded HOAs lead to special assessments.",
+        "Ask for all HOA docs (CC&Rs, bylaws, meeting minutes, financials) at least 7 days before closing.",
+        "Pending litigation or deferred maintenance is a negotiating point on price.",
+      ]},
+    ];
+
+    negSections.forEach((sec,si)=>{
+      safe();
+      fillRect(M,y-1,CW,6,si%2===0?G1:[248,250,252]);
+      doc.setDrawColor(...GRN);doc.setLineWidth(0.8);doc.line(M,y-1,M,y+5);
+      txt(sec.title,M+4,y+3,9,CHR,"bold");
+      nl(8);
+      sec.items.forEach(item=>{
+        safe();
+        fillRect(M+1,y-0.5,1.5,1.5,GRNM);
+        const lh=wrap(item,M+5,y,CW-6,8,G7,"normal",4);
+        nl(lh+2);
+      });
+      nl(3);
+    });
+
     addFooters();
     doc.save(`breadcrumbs-${loc.zip||"report"}.pdf`);
   };
