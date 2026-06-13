@@ -369,20 +369,29 @@ const NEIGHBORHOODS_DB={
 };
 const getNeighborhoods=city=>NEIGHBORHOODS_DB[city]||null;
 
-function getProgramsForLocation(state,city,county,profession="none",isVet=false){
+function getProgramsForLocation(state,city,county,profession="none",isVet=false,income=0,householdSize=1){
   const st=(state||"").toUpperCase();
   const ci=(city||"").toLowerCase();
   const co=(county||"").toLowerCase();
   const progs=[];
+  // Houston/Harris 2024 AMI by household size (approx)
+  const HOUSTON_AMI={1:63050,2:72050,3:81050,4:90000,5:97200,6:104400,7:111600,8:118800};
+  const TX_STATE_AMI={1:58000,2:66300,3:74550,4:82800,5:89450,6:96100,7:102700,8:109350};
+  const hs=Math.min(Math.max(householdSize||1,1),8);
+  const houstonAMI=HOUSTON_AMI[hs];
+  const txAMI=TX_STATE_AMI[hs];
   progs.push({id:"fha_prog",name:"FHA Loan",short:"3.5% min down, 580+ credit",amount:"3.5% down",badge:"Federal",layer:"federal",calc:()=>0,incompat:[],note:"HUD-insured. Available in all 50 states.",url:"https://www.hud.gov/buying/loans"});
   progs.push({id:"va_prog",name:"VA Home Loan",short:"$0 down for eligible veterans",amount:"$0 down",badge:"Heroes",layer:"heroes",calc:()=>0,incompat:[],note:"No down payment, no PMI. Veterans, active duty, surviving spouses.",url:"https://www.va.gov/housing-assistance/home-loans/"});
+  progs.push({id:"usda",name:"USDA Rural Development Loan",short:"$0 down for eligible rural/suburban areas",amount:"$0 down",badge:"Federal",layer:"federal",calc:()=>0,incompat:[],note:"Income limit ~115% AMI. Property must be in USDA-eligible area. Check eligibility at eligibility.sc.egov.usda.gov. Min 640 credit.",url:"https://www.rd.usda.gov/programs-services/single-family-housing-programs"});
+  progs.push({id:"hud_203k",name:"FHA 203(k) Rehab Loan",short:"Buy + renovate in one FHA loan",amount:"Rehab funds",badge:"Federal",layer:"federal",calc:()=>0,incompat:[],note:"580+ credit, 3.5% down. Rolls renovation costs into your mortgage. Good for fixer-uppers. HUD-approved 203(k) consultant required.",url:"https://www.hud.gov/program_offices/housing/sfh/203k"});
+  progs.push({id:"nfmc",name:"NeighborWorks / NHS DPA",short:"Up to $15K DPA, flexible income limits",amount:"Up to $15K",badge:"Nonprofit",layer:"heroes",calc:()=>15000,incompat:[],note:"National nonprofit network. No strict AMI cap in many markets. Credit as low as 580. Search nw.org for local affiliate.",url:"https://www.nw.org"});
   if(st==="TX"){
     progs.push({id:"tsahc",name:"TSAHC Home Sweet Texas",short:"Up to 5% DPA grant, no repayment",amount:"Up to 5%",badge:"State",layer:"state",calc:p=>Math.round(p*.05),incompat:["tdhca"],note:"Income limit varies by county. tsahc.org",url:"https://www.tsahc.org"});
     progs.push({id:"tdhca",name:"My First Texas Home (TDHCA)",short:"5% DPA + below-market rate",amount:"5% of loan",badge:"State",layer:"state",calc:p=>Math.round(p*.05),incompat:["tsahc"],note:"30-yr fixed below-market rate. tdhca.state.tx.us",url:"https://www.tdhca.texas.gov"});
-    progs.push({id:"mcc_tx",name:"Texas MCC",short:"15% of interest back as tax credit/yr",amount:"~$1,400+/yr",badge:"Federal",layer:"federal",calc:()=>0,incompat:[],note:"Reinstated March 2026. First-time buyers only.",url:"https://www.tsahc.org"});
+    progs.push({id:"mcc_tx",name:"Texas MCC",short:"15% of interest back as tax credit/yr",amount:"~$1,400+/yr",badge:"Federal",layer:"federal",calc:()=>0,incompat:[],note:"Reinstated March 2026. First-time buyers only.",url:"https://www.tsahc.org",expires:"Reinstated Mar 2026 — verify active"});
     if(ci.includes("houston")||co.includes("harris")){
-      progs.push({id:"hap",name:"City of Houston HAP",short:"Up to $30K forgivable, city limits",amount:"Up to $30K",badge:"City",layer:"city",calc:()=>30000,incompat:["harvey"],note:"Inside Houston city limits. 80% AMI limit. Forgiven after 5 years.",url:"https://houstontx.gov/housing/hap.html"});
-      progs.push({id:"harvey",name:"Harvey HbAP 2.0",short:"Up to $125K if Houston resident 8/25/17",amount:"Up to $125K",badge:"City",layer:"city",calc:()=>125000,incompat:["hap"],note:"Call 832-393-0550 first. 120% AMI limit. Avoid June 18–July 11.",url:"https://houstontx.gov/housing/"});
+      progs.push({id:"hap",name:"City of Houston HAP",short:"Up to $30K forgivable, city limits",amount:"Up to $30K",badge:"City",layer:"city",calc:()=>30000,incompat:["harvey"],note:"Inside Houston city limits. 80% AMI limit. Forgiven after 5 years.",url:"https://houstontx.gov/housing/hap.html",amiLimit:houstonAMI*0.80,expires:"Annual cycle — verify availability"});
+      progs.push({id:"harvey",name:"Harvey HbAP 2.0",short:"Up to $125K if Houston resident 8/25/17",amount:"Up to $125K",badge:"City",layer:"city",calc:()=>125000,incompat:["hap"],note:"Call 832-393-0550 first. 120% AMI limit. Avoid June 18–July 11.",url:"https://houstontx.gov/housing/",amiLimit:houstonAMI*1.20,expires:"Rolling — call to confirm funds"});
     }
     if(ci.includes("dallas")||co.includes("dallas")){
       progs.push({id:"dhap",name:"Dallas Homebuyer Assistance",short:"Up to $60K forgivable",amount:"Up to $60K",badge:"City",layer:"city",calc:()=>60000,incompat:[],note:"Dallas city limits. 80% AMI limit.",url:"https://dallascityhall.com/departments/housing"});
@@ -526,6 +535,13 @@ function generateChecklist(data,loc){
       ...(hasHarvey?[{id:"3_h2",cat:"\uD83D\uDCB0 Harvey",text:"Avoid scheduling closing June 18–July 11 (Houston fiscal year — no funds wired)",urgent:true}]:[]),
       ...(hasMCC?[{id:"3_m1",cat:"\uD83D\uDCB0 MCC",text:"Ask your lender to stack the Mortgage Credit Certificate with your DPA programs",urgent:false}]:[]),
       {id:"3_9",cat:"\uD83C\uDFE0 Buying",text:"Hire a buyer's real estate agent — they cost you nothing, seller pays their commission",urgent:false},
+      {id:"3_pest",cat:"\uD83C\uDFE0 Inspection",text:"Schedule a separate termite/pest inspection — lenders require it for FHA/VA loans and it protects against hidden structural damage",urgent:true},
+      {id:"3_survey",cat:"\uD83D\uDCCF Survey",text:"Order a property survey to confirm exact lot lines and boundaries before closing — title disputes are expensive after the fact",urgent:false},
+      {id:"3_title",cat:"\uD83D\uDCDC Title",text:"Work with your title company to resolve any outstanding liens or title defects before the closing date",urgent:true},
+      {id:"3_warranty",cat:"\uD83D\uDEE1\uFE0F Warranty",text:"Compare 1-year home warranty providers (American Home Shield, Choice Home Warranty) — ask the seller to cover it in negotiations",urgent:false},
+      {id:"3_dpa_lender",cat:"\uD83D\uDCB0 DPA",text:"Explicitly confirm your chosen lender participates in your selected DPA programs — not all lenders underwrite all assistance programs",urgent:true},
+      {id:"3_agent_check",cat:"\uD83E\uDD1D Agent",text:"Ask your agent: 'When was the last time you successfully closed a transaction using a down payment assistance program?' — experience matters",urgent:false},
+      {id:"3_buydown",cat:"\uD83D\uDCC9 Rate",text:"Ask your loan officer how low you can buy down your rate using points, and whether your lender allows stacking multiple assistance programs",urgent:false},
     ]},
     "6mo":{label:"6 months out",color:C.amber,bg:C.amberLight,icon:"\uD83C\uDFD7\uFE0F",desc:"Building your foundation.",tasks:[
       {id:"6_1",cat:"\uD83D\uDCB3 Credit",text:needsScore?`Your ${score} score needs work — pay credit cards below 30% utilization now`:`Maintain your ${score} score — set up autopay on all accounts`,urgent:needsScore},
@@ -798,7 +814,7 @@ function StepLocation({data,setData,onNext}){
     setLoading(false);
   };
   const confirm=()=>{setData({...data,zip,locationInfo:locInfo});onNext();};
-  const progs=locInfo?getProgramsForLocation(locInfo.state,locInfo.city,locInfo.county,data.profession,data.isVet):[];
+  const progs=locInfo?getProgramsForLocation(locInfo.state,locInfo.city,locInfo.county,data.profession,data.isVet,data.income,data.householdSize||1):[];
   const layers={federal:0,state:0,city:0,heroes:0};
   progs.forEach(p=>{if(layers[p.layer]!==undefined)layers[p.layer]++;});
   const crime=locInfo?getCrime(locInfo.city):null;
@@ -824,6 +840,19 @@ function StepLocation({data,setData,onNext}){
           ))}
         </div>
         {!data.isFirstTime&&<Alert type="info" style={{marginTop:8}}>Some DPA programs are first-time buyer only. We'll still show you the programs you qualify for.</Alert>}
+      </Card>
+      <Card>
+        <SecTitle>Household size</SecTitle>
+        <p style={{fontSize:12,color:C.gray700,marginBottom:10,lineHeight:1.5}}>Number of people in your household, including yourself. Used to determine AMI eligibility for assistance programs.</p>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          {[1,2,3,4,5,6,7,8].map(n=>(
+            <div key={n} onClick={()=>setData({...data,householdSize:n})}
+              style={{width:40,height:40,borderRadius:10,border:`2px solid ${(data.householdSize||1)===n?C.green:C.gray300}`,background:(data.householdSize||1)===n?C.green:C.white,color:(data.householdSize||1)===n?C.white:C.charcoal,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,cursor:"pointer"}}>
+              {n}
+            </div>
+          ))}
+        </div>
+        {(data.householdSize||1)>=4&&<Alert type="info" style={{marginTop:8}}>Larger households often qualify for higher AMI thresholds — you may be eligible for more programs.</Alert>}
       </Card>
       <Card>
         <SecTitle>Are you currently renting?</SecTitle>
@@ -895,7 +924,7 @@ function StepIncome({data,setData,onNext,onBack}){
     <div>
       <Card>
         <SecTitle>Income</SecTitle>
-        <Slider label="Annual gross income" min={30000} max={700000} step={1000} value={d.income} onChange={v=>setData({...d,income:v})} display={fmtK(d.income)+"/yr"} note={fmt(grossMo)+"/mo gross"}/>
+        <Slider label="Annual gross income" min={0} max={700000} step={1000} value={d.income} onChange={v=>setData({...d,income:v})} display={fmtK(d.income)+"/yr"} note={fmt(grossMo)+"/mo gross"}/>
         <Slider label="Alimony received" min={0} max={700000} step={500} value={d.alimony||0} onChange={v=>setData({...d,alimony:v})} display={fmtK(d.alimony||0)+"/yr"} note={alimonyMo>0?fmt(alimonyMo)+"/mo · counts toward qualifying income":"Optional — add if you receive alimony"}/>
       </Card>
       <Card>
@@ -934,8 +963,11 @@ function StepIncome({data,setData,onNext,onBack}){
         <Slider label="Credit score" min={500} max={850} step={10} value={d.score} onChange={v=>setData({...d,score:v})} display={d.score}
           note={d.score>=740?"Excellent — best conventional rates":d.score>=700?"Good — conventional eligible":d.score>=640?"Fair — FHA recommended":"Below 640 — FHA or credit repair first"}
           color={d.score>=740?C.green:d.score>=700?C.greenMid:d.score>=640?C.amber:C.red}/>
-        <Slider label="Down payment %" min={0} max={25} step={1} value={d.dpPct} onChange={v=>setData({...d,dpPct:v})} display={d.dpPct+"%"}
-          note={d.dpPct>=20?"20%+ — no PMI required":d.dpPct>=10?"10%+ — reduced PMI":"Under 10% — PMI applies"}/>
+        <div style={{fontSize:11,color:C.gray500,marginTop:-8,marginBottom:12,lineHeight:1.6}}>
+          Lenders evaluate your application using the middle score from the 3 major credit bureaus.{" "}
+          <a href="https://www.annualcreditreport.com" target="_blank" rel="noreferrer" style={{color:C.blue}}>Check your credit report for free once a year at annualcreditreport.com</a>.
+        </div>
+
       </Card>
       <div style={{display:"grid",gridTemplateColumns:"1fr 2fr",gap:8}}>
         <BtnSec onClick={onBack}>← Back</BtnSec>
@@ -994,13 +1026,20 @@ function StepLoan({data,setData,onNext,onBack}){
   const fr=6.48,vr=6.17,cr=convRate(d.score,d.dpPct);
   const ar=d.loanType==="fha"?fr:d.loanType==="va"?vr:cr;
   const loan=d.price*(1-d.dpPct/100);
-  const piti=Math.round(mpi(loan,ar,360)+d.price*0.022/12+d.price*0.012/12);
-  const fe=Math.round(piti/(d.income/12)*100),be=Math.round((piti+d.debts)/(d.income/12)*100);
+  const effMo=d.loanTerm==="5arm"||d.loanTerm==="7arm"?360:(d.loanTerm||360);
+  const piti=Math.round(mpi(loan,ar,effMo)+d.price*0.022/12+d.price*0.012/12);
+  const fe=Math.round(piti/(d.income/12)*100),be=Math.round((piti+d.debts+(d.student||0))/(d.income/12)*100);
   useEffect(()=>{if(d.loanType!==rec.type)setData({...d,loanType:rec.type});},[d.score,d.dpPct,d.isVet]);
   const loans=[
     {id:"fha",name:"FHA Loan",rate:fr,emoji:"🏛️",pros:["3.5% minimum down","Accessible 580+ credit","Flexible qualification"],cons:["Lifetime MIP < 10% down","1.75% upfront MIP","Stricter property rules"]},
     {id:"conv",name:"Conventional",rate:cr,emoji:"🏦",pros:["PMI cancels at 20%","Lower long-term cost","No upfront insurance"],cons:["620+ credit required","Higher score = better rate","Larger reserves needed"]},
     {id:"va",name:"VA Loan",rate:vr,emoji:"🎖️",pros:["$0 down payment","No PMI ever","Lowest available rate"],cons:["Veterans & active duty","VA funding fee","Need Certificate of Eligibility"]},
+  ];
+  const terms=[
+    {id:360,label:"30-yr fixed",note:"Lowest monthly payment"},
+    {id:180,label:"15-yr fixed",note:"Less interest, higher payment"},
+    {id:"5arm",label:"5/1 ARM",note:"Fixed 5 yrs, then adjusts"},
+    {id:"7arm",label:"7/1 ARM",note:"Fixed 7 yrs, then adjusts"},
   ];
   return(
     <div>
@@ -1031,6 +1070,30 @@ function StepLoan({data,setData,onNext,onBack}){
         })}
       </div>
       <Card>
+        <SecTitle>Down payment</SecTitle>
+        <Slider label="Down payment %" min={0} max={25} step={1} value={d.dpPct} onChange={v=>setData({...d,dpPct:v})} display={d.dpPct+"%"}
+          note={d.dpPct>=20?"20%+ — no PMI required, best conventional rates":d.dpPct>=10?"10%+ — reduced PMI":"Under 10% — PMI / MIP applies"}/>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.gray500,marginTop:-8}}>
+          <span>Down payment amount:</span>
+          <span style={{fontWeight:700,color:C.charcoal}}>{fmt(d.price*d.dpPct/100)}</span>
+        </div>
+      </Card>
+      <Card>
+        <SecTitle>Loan term</SecTitle>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8}}>
+          {terms.map(t=>(
+            <div key={t.id} onClick={()=>setData({...d,loanTerm:t.id})}
+              style={{border:`2px solid ${(d.loanTerm||360)===t.id?C.green:C.gray300}`,borderRadius:10,padding:"10px 12px",cursor:"pointer",background:(d.loanTerm||360)===t.id?C.greenLight:C.white}}>
+              <div style={{fontSize:13,fontWeight:800,color:(d.loanTerm||360)===t.id?C.green:C.charcoal}}>{t.label}</div>
+              <div style={{fontSize:10,color:C.gray500,marginTop:2}}>{t.note}</div>
+            </div>
+          ))}
+        </div>
+        {(d.loanTerm==="5arm"||d.loanTerm==="7arm")&&(
+          <Alert type="warning" style={{marginTop:8}}>ARM rates adjust after the initial fixed period. Your rate could rise significantly. Only choose ARM if you plan to sell or refinance before adjustment.</Alert>
+        )}
+      </Card>
+      <Card>
         <SecTitle>Pre-qualification check</SecTitle>
         {[{l:"Front-end DTI (housing/income)",v:fe,lim:28,ll:"28% ideal"},{l:"Back-end DTI (all debts/income)",v:be,lim:43,ll:"43% lender max"}].map(item=>(
           <div key={item.l} style={{marginBottom:12}}>
@@ -1060,8 +1123,11 @@ function StepLoan({data,setData,onNext,onBack}){
 function StepPrograms({data,setData,onNext,onBack}){
   const d=data;
   const loc=d.locationInfo||{};
-  const allP=getProgramsForLocation(loc.state,loc.city,loc.county,d.profession,d.isVet);
+  const allP=getProgramsForLocation(loc.state,loc.city,loc.county,d.profession,d.isVet,d.income,d.householdSize||1);
   const incompat=new Set();
+  const estimatedAssets=((d.k401||0)+(d.roth||0)+(d.hsa||0));
+  const harveyAssetCap=75000;
+  const overHarveyAssetCap=estimatedAssets>harveyAssetCap;
   d.programs.forEach(id=>{const p=allP.find(x=>x.id===id);if(p)p.incompat.forEach(i=>incompat.add(i));});
   const toggle=id=>{
     const prog=allP.find(p=>p.id===id);if(!prog)return;
@@ -1098,14 +1164,18 @@ function StepPrograms({data,setData,onNext,onBack}){
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:8}}>
               {lp.map(prog=>{
                 const on=d.programs.includes(prog.id),dim=!on&&incompat.has(prog.id);
+                const amiOver=prog.amiLimit&&d.income>0&&d.income>prog.amiLimit;
                 return(
                   <div key={prog.id} onClick={dim?undefined:()=>toggle(prog.id)}
-                    style={{border:on?`2px solid ${C.green}`:`1.5px solid ${C.gray300}`,borderRadius:12,padding:12,cursor:dim?"not-allowed":"pointer",background:on?C.greenLight:C.white,opacity:dim?.35:1,position:"relative"}}>
+                    style={{border:on?`2px solid ${C.green}`:`1.5px solid ${C.gray300}`,borderRadius:12,padding:12,cursor:dim?"not-allowed":"pointer",background:on?C.greenLight:C.white,opacity:dim?.35:amiOver?.4:1,position:"relative"}}>
                     <div style={{position:"absolute",top:8,right:8,width:18,height:18,borderRadius:"50%",background:on?C.green:C.gray100,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:C.white,fontWeight:800}}>{on?"✓":""}</div>
                     <div style={{fontSize:11,fontWeight:700,marginBottom:4,paddingRight:24,color:C.charcoal}}>{prog.name}</div>
                     <div style={{fontSize:10,color:C.gray500,marginBottom:6,lineHeight:1.35}}>{prog.short}</div>
                     <div style={{fontSize:14,fontWeight:900,color:on?C.green:C.charcoal}}>{prog.calc(d.price)>0?fmt(prog.calc(d.price)):prog.amount}</div>
                     <div style={{fontSize:10,color:C.gray500,marginTop:4,lineHeight:1.3}}>{prog.note}</div>
+                    {amiOver&&<span style={{fontSize:9,fontWeight:700,color:C.red,background:C.redLight,padding:"1px 6px",borderRadius:3,display:"block",marginTop:3}}>Income may exceed AMI limit</span>}
+                    {prog.id==="harvey"&&overHarveyAssetCap&&<span style={{fontSize:9,fontWeight:700,color:"#92400E",background:C.amberLight,padding:"1px 6px",borderRadius:3,display:"block",marginTop:3}}>Check Harvey asset cap ($75K)</span>}
+                    {prog.expires&&<span style={{fontSize:9,fontWeight:700,color:"#92400E",background:C.amberLight,padding:"1px 6px",borderRadius:3,display:"block",marginTop:3}}>⏰ Funding: {prog.expires}</span>}
                     {prog.url&&<a href={prog.url} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} style={{fontSize:10,color:C.blue,display:"block",marginTop:4}}>Learn more →</a>}
                   </div>
                 );
@@ -1114,17 +1184,18 @@ function StepPrograms({data,setData,onNext,onBack}){
           </div>
         );
       })}
-      {totalAssist>0&&(
-        <Card>
-          <SecTitle>Your stacked total</SecTitle>
-          <InfoRow label="Total assistance" value={fmt(totalAssist)} valueColor={C.green}/>
-          <InfoRow label="Cash needed (DP + closing)" value={fmt(needed)}/>
-          <InfoRow label="Assistance covers" value={"- "+fmt(Math.min(totalAssist,needed))} valueColor={C.green}/>
-          {totalAssist>needed&&<InfoRow label="Surplus → principal reduction" value={"- "+fmt(totalAssist-needed)} valueColor={C.green}/>}
-          <InfoRow label="You bring to closing" value={fmt(oop)} valueColor={oop<1000?C.green:oop<10000?"#92400E":C.red} bold topBorder/>
-          {oop===0&&<Alert type="success">🎉 $0 out of pocket at closing with this combination!</Alert>}
-        </Card>
-      )}
+      <Card>
+        <SecTitle>Your stacked total</SecTitle>
+        <InfoRow label="Total assistance" value={totalAssist>0?fmt(totalAssist):"$0 — select programs above"} valueColor={totalAssist>0?C.green:C.gray500}/>
+        <InfoRow label="Cash needed (DP + closing)" value={fmt(needed)}/>
+        <InfoRow label="Assistance covers" value={totalAssist>0?"- "+fmt(Math.min(totalAssist,needed)):"—"} valueColor={C.green}/>
+        {totalAssist>needed&&<InfoRow label="Surplus → principal reduction" value={"- "+fmt(totalAssist-needed)} valueColor={C.green}/>}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0 2px",borderTop:`2px solid ${C.gray200}`,marginTop:6}}>
+          <span style={{fontSize:13,fontWeight:800,color:C.charcoal}}>You bring to closing</span>
+          <span style={{fontSize:20,fontWeight:900,color:oop===0?C.green:oop<10000?"#92400E":C.red}}>{fmt(oop)}</span>
+        </div>
+        {oop===0&&totalAssist>0&&<Alert type="success">🎉 $0 out of pocket at closing with this combination!</Alert>}
+      </Card>
       <div style={{display:"grid",gridTemplateColumns:"1fr 2fr",gap:8}}>
         <BtnSec onClick={onBack}>← Back</BtnSec>
         <BtnPri onClick={onNext}>Continue →</BtnPri>
@@ -1170,7 +1241,8 @@ function StepBudget({data,setData,onNext,onBack}){
       </Card>
       <Card>
         <SecTitle>Existing monthly debts</SecTitle>
-        <Slider label="Other monthly debts" min={0} max={2000} step={50} value={d.debts} onChange={v=>setData({...d,debts:v})} note="Car loans, student loans, credit cards — excluding future housing payment"/>
+        <Slider label="Monthly student loan payments" min={0} max={2000} step={25} value={d.student||0} onChange={v=>setData({...d,student:v})} note="Counts toward your back-end DTI"/>
+        <Slider label="Other monthly debts (car, credit cards)" min={0} max={2000} step={50} value={d.debts} onChange={v=>setData({...d,debts:v})} note="Car loans, credit cards — excluding future housing payment"/>
         {d.debts>500&&<Alert type="warning">High debt load ({fmt(d.debts)}/mo) will affect your DTI ratio. Consider paying down debts before buying.</Alert>}
       </Card>
       <div style={{display:"grid",gridTemplateColumns:"1fr 2fr",gap:8}}>
@@ -1265,7 +1337,7 @@ function StepResults({data,onBack,onNext,onRestart}){
   const trueTakeHome=grossMo-taxFICA-pretaxMo-rothmo;
   const ar=d.loanType==="fha"?6.48:d.loanType==="va"?6.17:convRate(d.score,d.dpPct);
   const dp=d.price*d.dpPct/100;
-  const allP=getProgramsForLocation(loc.state,loc.city,loc.county,d.profession,d.isVet);
+  const allP=getProgramsForLocation(loc.state,loc.city,loc.county,d.profession,d.isVet,d.income,d.householdSize||1);
   const totalAssist=allP.filter(p=>d.programs.includes(p.id)).reduce((s,p)=>s+p.calc(d.price),0);
   const fhaUp=d.loanType==="fha"?(d.price-dp)*0.0175:0;
   const cashNeeded=dp+d.price*0.03+1000+fhaUp;
@@ -1282,10 +1354,10 @@ function StepResults({data,onBack,onNext,onRestart}){
   const housing=piti+utils+hoa+maint;
   const mccMo=d.programs.some(p=>p.includes("mcc"))?Math.round(piMo*12*.15/12):0;
   const currentRent=d.isRenting?(d.monthlyRent||0):0;
-  const personal=d.groc+d.dining+d.ent+d.pcare+d.car+d.debts+d.efund+currentRent;
+  const personal=d.groc+d.dining+d.ent+d.pcare+d.car+d.debts+(d.student||0)+d.efund+currentRent;
   const remaining=trueTakeHome-housing-personal+mccMo;
   const bufCol=remaining>=500?C.green:remaining>=100?"#92400E":C.red;
-  const fe=Math.round(piti/grossMo*100),be=Math.round((piti+d.debts)/grossMo*100);
+  const fe=Math.round(piti/grossMo*100),be=Math.round((piti+d.debts+(d.student||0))/grossMo*100);
   const fprice=Math.round(d.price*Math.pow(1.043,waitYr));
   const fpiti=Math.round(mpi(fprice*(1-d.dpPct/100),ar+waitYr*.1,360)+fprice*.022/12+fprice*.012/12);
   const vtype=remaining>=500?"success":remaining>=100?"warning":"danger";
@@ -1552,7 +1624,7 @@ function StepResults({data,onBack,onNext,onRestart}){
           <div style={{display:"flex",justifyContent:"space-between",padding:"7px 0 12px",borderTop:`1px solid ${C.gray300}`,marginTop:4,fontSize:14,fontWeight:900,color:C.green}}>
             <span>True spendable take-home</span><span>{fmt(trueTakeHome)}/mo</span>
           </div>
-          {[[`P&I (${fmt(effLoan)} @ ${ar.toFixed(2)}%)`,piMo],["Property tax (2.2%)",txMo],["Insurance (1.2%)",insMo],["PMI / MIP",miMo],["Utilities (est.)",utils],["HOA + Maintenance",hoa+maint],["Groceries",d.groc],["Dining out",d.dining],["Entertainment",d.ent],["Personal care",d.pcare],["Car",d.car],["Other debts",d.debts],["Emergency fund",d.efund],["Retirement (all)",k401mo+rothmo+hsamo],d.isRenting?["Current rent (while renting)",currentRent]:null].filter(r=>r&&r[1]>0).map((r,i)=>(
+          {[[`P&I (${fmt(effLoan)} @ ${ar.toFixed(2)}%)`,piMo],["Property tax (2.2%)",txMo],["Insurance (1.2%)",insMo],["PMI / MIP",miMo],["Utilities (est.)",utils],["HOA + Maintenance",hoa+maint],["Groceries",d.groc],["Dining out",d.dining],["Entertainment",d.ent],["Personal care",d.pcare],["Car",d.car],["Other debts",d.debts],["Student loans",d.student||0],["Emergency fund",d.efund],["Retirement (all)",k401mo+rothmo+hsamo],d.isRenting?["Current rent (while renting)",currentRent]:null].filter(r=>r&&r[1]>0).map((r,i)=>(
             <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"3px 0",borderBottom:`0.5px solid ${C.gray100}`,fontSize:12}}>
               <span style={{color:C.gray700}}>{r[0]}</span><span style={{fontWeight:600}}>{fmt(r[1])}/mo</span>
             </div>
@@ -1783,6 +1855,98 @@ function StepResults({data,onBack,onNext,onRestart}){
   );
 }
 
+function StepUnderwriting({data,onNext,onBack}){
+  const d=data;
+  const loc=d.locationInfo||{};
+  const grossMo=Math.round((d.income+(d.alimony||0))/12);
+  const allP=getProgramsForLocation(loc.state,loc.city,loc.county,d.profession,d.isVet,d.income,d.householdSize||1);
+  const totalAssist=allP.filter(p=>d.programs.includes(p.id)).reduce((s,p)=>s+p.calc(d.price),0);
+  const dp=d.price*d.dpPct/100;
+  const fhaUp=d.loanType==="fha"?(d.price-dp)*0.0175:0;
+  const cashNeeded=dp+d.price*0.03+1000+fhaUp;
+  const assistPrin=Math.max(0,totalAssist-cashNeeded);
+  const effLoan=(d.price-dp)-assistPrin;
+  const ar=d.loanType==="fha"?6.48:d.loanType==="va"?6.17:convRate(d.score,d.dpPct);
+  const piMo=Math.round(mpi(effLoan,ar,360));
+  const txMo=Math.round(d.price*0.022/12),insMo=Math.round(d.price*0.012/12);
+  let miMo=0;
+  if(d.loanType==="fha")miMo=Math.round(effLoan*0.0055/12);
+  else if(d.loanType==="conv"){const pr=d.score>=780?.002:d.score>=760?.003:d.score>=740?.004:d.score>=720?.006:.009;miMo=d.dpPct<20?Math.round(effLoan*pr/12):0;}
+  const piti=piMo+txMo+insMo+miMo;
+  const totalDebt=piti+d.debts+(d.student||0);
+  const fe=Math.round(piti/grossMo*100);
+  const be=Math.round(totalDebt/grossMo*100);
+  const feStatus=fe<=28?"good":fe<=33?"caution":"risk";
+  const beStatus=be<=36?"good":be<=43?"caution":"risk";
+  const statusColor=s=>s==="good"?C.green:s==="caution"?C.amber:C.red;
+  const statusLabel=s=>s==="good"?"✓ Within guidelines":s==="caution"?"⚠ Borderline":"✗ Over limit";
+  return(
+    <div>
+      <Alert type="info">These are the two ratios lenders use to decide if you qualify. See where you land before reviewing your full results.</Alert>
+      <Card>
+        <SecTitle>Front-End Ratio (Housing Ratio)</SecTitle>
+        <div style={{fontSize:11,color:C.gray500,marginBottom:10,lineHeight:1.5}}>
+          (PITI) ÷ Gross Monthly Income · <strong>Benchmark: 28% max</strong>
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+          <span style={{fontSize:28,fontWeight:900,color:statusColor(feStatus)}}>{fe}%</span>
+          <span style={{fontSize:12,fontWeight:700,color:statusColor(feStatus),background:fe<=28?C.greenLight:fe<=33?C.amberLight:C.redLight,padding:"4px 12px",borderRadius:99}}>{statusLabel(feStatus)}</span>
+        </div>
+        <PBar value={fe} max={50} color={statusColor(feStatus)}/>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:C.gray500,marginTop:3}}>
+          <span>0%</span><span style={{color:C.green,fontWeight:700}}>28% ideal</span><span>50%+</span>
+        </div>
+        <div style={{marginTop:10,display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+          <div style={{background:C.gray100,borderRadius:8,padding:"8px 10px",textAlign:"center"}}>
+            <div style={{fontSize:10,color:C.gray500}}>P&I</div>
+            <div style={{fontSize:13,fontWeight:800}}>{fmt(piMo)}/mo</div>
+          </div>
+          <div style={{background:C.gray100,borderRadius:8,padding:"8px 10px",textAlign:"center"}}>
+            <div style={{fontSize:10,color:C.gray500}}>Taxes + Ins</div>
+            <div style={{fontSize:13,fontWeight:800}}>{fmt(txMo+insMo)}/mo</div>
+          </div>
+          <div style={{background:C.gray100,borderRadius:8,padding:"8px 10px",textAlign:"center"}}>
+            <div style={{fontSize:10,color:C.gray500}}>PMI/MIP</div>
+            <div style={{fontSize:13,fontWeight:800}}>{miMo>0?fmt(miMo)+"/mo":"None"}</div>
+          </div>
+        </div>
+      </Card>
+      <Card>
+        <SecTitle>Back-End Ratio (Debt-to-Income / DTI)</SecTitle>
+        <div style={{fontSize:11,color:C.gray500,marginBottom:10,lineHeight:1.5}}>
+          (PITI + All Monthly Debts) ÷ Gross Monthly Income · <strong>Benchmark: 36–43% max</strong>
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+          <span style={{fontSize:28,fontWeight:900,color:statusColor(beStatus)}}>{be}%</span>
+          <span style={{fontSize:12,fontWeight:700,color:statusColor(beStatus),background:be<=36?C.greenLight:be<=43?C.amberLight:C.redLight,padding:"4px 12px",borderRadius:99}}>{statusLabel(beStatus)}</span>
+        </div>
+        <PBar value={be} max={60} color={statusColor(beStatus)}/>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:C.gray500,marginTop:3}}>
+          <span>0%</span><span style={{color:C.green,fontWeight:700}}>36%</span><span style={{color:C.amber,fontWeight:700}}>43% max</span><span>60%+</span>
+        </div>
+        <div style={{marginTop:10}}>
+          {[[`PITI`,piti],[`Student loans`,d.student||0],[`Other debts`,d.debts]].filter(r=>r[1]>0).map((r,i)=>(
+            <div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:12,padding:"3px 0",borderBottom:`0.5px solid ${C.gray100}`}}>
+              <span style={{color:C.gray700}}>{r[0]}</span><span style={{fontWeight:700}}>{fmt(r[1])}/mo</span>
+            </div>
+          ))}
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:12,padding:"6px 0 0",fontWeight:800}}>
+            <span>Total monthly obligations</span><span>{fmt(totalDebt)}/mo</span>
+          </div>
+        </div>
+      </Card>
+      <div style={{background:C.gray100,borderRadius:12,padding:"12px 14px",fontSize:11,color:C.gray700,lineHeight:1.6}}>
+        <strong>Gross monthly income used:</strong> {fmt(grossMo)}/mo{(d.alimony||0)>0?` (includes ${fmt(Math.round((d.alimony||0)/12))}/mo alimony)`:""}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 2fr",gap:8,marginTop:12}}>
+        <BtnSec onClick={onBack}>← Back</BtnSec>
+        <BtnPri onClick={onNext}>See My Full Results →</BtnPri>
+      </div>
+      <AcronymBar keys={["PITI","DTI","PMI","MIP","FHA","VA"]}/>
+    </div>
+  );
+}
+
 const STEPS=[
   {id:1,label:"Location",icon:"📍",title:"Where are you buying?"},
   {id:2,label:"Income",icon:"💰",title:"Your income & savings"},
@@ -1790,17 +1954,19 @@ const STEPS=[
   {id:4,label:"Loan",icon:"🏦",title:"Choose your loan"},
   {id:5,label:"Programs",icon:"🎯",title:"Available programs"},
   {id:6,label:"Budget",icon:"📊",title:"Monthly spending"},
-  {id:7,label:"Results",icon:"✨",title:"Your full picture"},
-  {id:8,label:"Action Plan",icon:"✅",title:"Your personalized action plan"},
+  {id:7,label:"Ratios",icon:"📐",title:"Underwriting ratios"},
+  {id:8,label:"Results",icon:"✨",title:"Your full picture"},
+  {id:9,label:"Action Plan",icon:"✅",title:"Your personalized action plan"},
 ];
 
 const DEFAULT={
   zip:"",locationInfo:null,isFirstTime:true,
   income:86000,alimony:0,score:740,dpPct:5,debts:300,isVet:false,profession:"none",monthlyRent:1500,isRenting:true,
   k401:3000,roth:1000,hsa:0,
-  price:340000,loanType:"fha",
+  price:340000,loanType:"fha",loanTerm:360,
   programs:["tsahc","mcc_tx"],
   groc:400,dining:200,ent:150,pcare:150,car:500,efund:300,
+  householdSize:1,student:0,
 };
 
 export default function App(){
@@ -1844,8 +2010,9 @@ export default function App(){
         {step===4&&<StepLoan data={data} setData={setData} onNext={()=>goTo(5)} onBack={()=>goTo(3)}/>}
         {step===5&&<StepPrograms data={data} setData={setData} onNext={()=>goTo(6)} onBack={()=>goTo(4)}/>}
         {step===6&&<StepBudget data={data} setData={setData} onNext={()=>goTo(7)} onBack={()=>goTo(5)}/>}
-        {step===7&&<StepResults data={data} onBack={()=>goTo(6)} onNext={()=>goTo(8)} onRestart={()=>{setData(DEFAULT);goTo(1);}}/>}
-        {step===8&&<StepChecklist data={data} setData={setData} onNext={()=>goTo(8)} onBack={()=>goTo(7)}/>}
+        {step===7&&<StepUnderwriting data={data} onNext={()=>goTo(8)} onBack={()=>goTo(6)}/>}
+        {step===8&&<StepResults data={data} onBack={()=>goTo(7)} onNext={()=>goTo(9)} onRestart={()=>{setData(DEFAULT);goTo(1);}}/>}
+        {step===9&&<StepChecklist data={data} setData={setData} onNext={()=>goTo(9)} onBack={()=>goTo(8)}/>}
       </div>
     </div>
   );
