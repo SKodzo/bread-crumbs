@@ -1485,9 +1485,9 @@ function StepResults({data,onBack,onNext,onRestart}){
     // Labeled data row with divider
     const row=(label,val,valRgb=CHR,indent=0)=>{
       safe();
-      txt(label,M+indent,y,8,G5);
-      txt(val,W-M,y,9,valRgb,"bold","right");
-      nl(6);
+      txt(label,M+indent,y,10,G5);
+      txt(val,W-M,y,10,valRgb,"bold","right");
+      nl(6.5);
       hline(y);nl(1.5);
     };
 
@@ -1506,8 +1506,8 @@ function StepResults({data,onBack,onNext,onRestart}){
     const statCard=(label,value,rgb=GRN,bgRgb=GRNL,x2,ry2,w2,h2=14)=>{
       fillRect(x2,ry2,w2,h2,bgRgb);
       strokeRect(x2,ry2,w2,h2,rgb,0.2);
-      txt(label,x2+w2/2,ry2+4.5,7,G5,"normal","center");
-      txt(value,x2+w2/2,ry2+10.5,9.5,rgb,"bold","center");
+      txt(label,x2+w2/2,ry2+4.5,9,G5,"normal","center");
+      txt(value,x2+w2/2,ry2+10.5,11,rgb,"bold","center");
     };
 
     // ── Figma-inspired 2-column checklist row ────────────────────────────────
@@ -1518,15 +1518,15 @@ function StepResults({data,onBack,onNext,onRestart}){
       const CB_W=9;            // column 1 width (mm)
       const TEXT_X=M+CB_W;    // column 2 start-x
       const TEXT_W=CW-CB_W-1; // column 2 width
-      const PAD_V=3.5;         // vertical padding top/bottom inside row
-      const LINE_H=4.4;        // main text line height (mm)
-      const SUB_H=3.8;         // subtext line height
+      const PAD_V=4;            // vertical padding top/bottom inside row
+      const LINE_H=5;          // main text line height (mm) — 10pt font
+      const SUB_H=4.2;         // subtext line height — 8.5pt font
 
       // Pre-measure text to size the row correctly
-      doc.setFont("helvetica","bold");doc.setFontSize(8.5);
+      doc.setFont("helvetica","bold");doc.setFontSize(10);
       const mainLines=doc.splitTextToSize(String(task.text),TEXT_W);
       const rawCat=stripEmoji(task.cat);
-      const subLines=rawCat?(doc.setFont("helvetica","normal"),doc.setFontSize(7),doc.splitTextToSize(rawCat,TEXT_W)):[];
+      const subLines=rawCat?(doc.setFont("helvetica","normal"),doc.setFontSize(8.5),doc.splitTextToSize(rawCat,TEXT_W)):[];
       const mainH=mainLines.length*LINE_H;
       const subH=subLines.length>0?subLines.length*SUB_H+1.5:0;
       const rowH=mainH+subH+PAD_V*2;
@@ -1538,23 +1538,21 @@ function StepResults({data,onBack,onNext,onRestart}){
       doc.setDrawColor(220,224,228);doc.setLineWidth(0.18);
       doc.line(M,y+rowH,M+CW,y+rowH);
 
-      // Checkbox circle — centered on the first text line baseline
+      // Checkbox circle — open ring only (never pre-filled; urgent = red border, regular = slate)
       const cbCY=y+PAD_V+(LINE_H*0.65);
-      doc.setDrawColor(...(task.urgent?RED:[180,186,194]));
-      doc.setLineWidth(task.urgent?0.7:0.5);
+      doc.setDrawColor(...(task.urgent?RED:[160,168,178]));
+      doc.setLineWidth(task.urgent?0.8:0.5);
       doc.circle(CB_X,cbCY,2.8,"S");
-      // Urgent: filled accent dot inside
-      if(task.urgent){doc.setFillColor(...RED);doc.circle(CB_X,cbCY,1.4,"F");}
 
-      // Main task text — bold, charcoal (or red if urgent)
-      doc.setFont("helvetica","bold");doc.setFontSize(8.5);
+      // Main task text — 10pt bold, charcoal (urgent = red)
+      doc.setFont("helvetica","bold");doc.setFontSize(10);
       doc.setTextColor(...(task.urgent?RED:CHR));
       doc.text(mainLines,TEXT_X,y+PAD_V+LINE_H*0.85);
 
-      // Subtext (category) — regular, muted gray, smaller
+      // Subtext (category) — 8.5pt regular, muted gray
       if(subLines.length>0){
         const subY=y+PAD_V+mainH+1.5+SUB_H*0.85;
-        doc.setFont("helvetica","normal");doc.setFontSize(7);
+        doc.setFont("helvetica","normal");doc.setFontSize(8.5);
         doc.setTextColor(...G5);
         doc.text(subLines,TEXT_X,subY);
       }
@@ -1629,12 +1627,12 @@ function StepResults({data,onBack,onNext,onRestart}){
       for(let i=0;i<maxRows;i++){
         safe();
         if(col1[i]){
-          txt(col1[i][0],M,y,8.5,G5);
-          txt(col1[i][1],M+CW/2-2,y,8.5,col1[i][2]||CHR,"bold","right");
+          txt(col1[i][0],M,y,10,G5);
+          txt(col1[i][1],M+CW/2-2,y,10,col1[i][2]||CHR,"bold","right");
         }
         if(col2[i]){
-          txt(col2[i][0],M+CW/2+2,y,8.5,G5);
-          txt(col2[i][1],W-M,y,8.5,col2[i][2]||CHR,"bold","right");
+          txt(col2[i][0],M+CW/2+2,y,10,G5);
+          txt(col2[i][1],W-M,y,10,col2[i][2]||CHR,"bold","right");
         }
         nl(5);
         if(i<maxRows-1){hline(y,G1);nl(0.5);}
@@ -1676,8 +1674,8 @@ function StepResults({data,onBack,onNext,onRestart}){
     row("Inspection + appraisal","$1,000");
     safe();
     fillRect(M,y,CW,7,G1);
-    txt("Total cash needed",M+2,y+4.5,9,CHR,"bold");
-    txt(fmt(cashNeeded),W-M-2,y+4.5,9,CHR,"bold","right");
+    txt("Total cash needed",M+2,y+4.5,10,CHR,"bold");
+    txt(fmt(cashNeeded),W-M-2,y+4.5,10,CHR,"bold","right");
     nl(9);
     if(totalAssist>0){
       row("Assistance applied",`- ${fmt(Math.min(totalAssist,cashNeeded))}`,GRN);
@@ -1695,7 +1693,7 @@ function StepResults({data,onBack,onNext,onRestart}){
     sectionHead("Monthly Budget","");
 
     // Income waterfall
-    txt("INCOME",M,y,7,G5,"bold");nl(5);
+    txt("INCOME",M,y,9,G5,"bold");nl(5.5);
     row("Gross monthly income",fmt(grossMo),GRN);
     if(d.k401>0)row("401(k) / 403(b) pre-tax",`- ${fmt(Math.round(d.k401/12))}`,RED);
     if(d.hsa>0)row("HSA pre-tax",`- ${fmt(Math.round(d.hsa/12))}`,RED);
@@ -1703,11 +1701,11 @@ function StepResults({data,onBack,onNext,onRestart}){
     if(d.roth>0)row("Roth IRA (post-tax)",`- ${fmt(Math.round(d.roth/12))}`,RED);
     safe();
     fillRect(M,y,CW,7,GRNL);
-    txt("True spendable take-home",M+2,y+4.5,9,GRN,"bold");
-    txt(fmt(trueTakeHome)+"/mo",W-M-2,y+4.5,9,GRN,"bold","right");
+    txt("True spendable take-home",M+2,y+4.5,10,GRN,"bold");
+    txt(fmt(trueTakeHome)+"/mo",W-M-2,y+4.5,10,GRN,"bold","right");
     nl(11);
 
-    txt("HOUSING",M,y,7,G5,"bold");nl(5);
+    txt("HOUSING",M,y,9,G5,"bold");nl(5.5);
     row(`Principal & Interest (${ar.toFixed(2)}%)`,fmt(piMo)+"/mo");
     row("Property tax (est. 2.2%/yr)",fmt(txMo)+"/mo");
     row("Homeowners insurance (est. 1.2%/yr)",fmt(insMo)+"/mo");
@@ -1717,11 +1715,11 @@ function StepResults({data,onBack,onNext,onRestart}){
     row("Maintenance reserve (1%/yr)",fmt(maint)+"/mo");
     safe();
     fillRect(M,y,CW,7,G1);
-    txt("Total housing (PITI + utils + HOA)",M+2,y+4.5,9,CHR,"bold");
-    txt(fmt(housing)+"/mo",W-M-2,y+4.5,9,CHR,"bold","right");
+    txt("Total housing (PITI + utils + HOA)",M+2,y+4.5,10,CHR,"bold");
+    txt(fmt(housing)+"/mo",W-M-2,y+4.5,10,CHR,"bold","right");
     nl(11);
 
-    txt("LIFESTYLE",M,y,7,G5,"bold");nl(5);
+    txt("LIFESTYLE",M,y,9,G5,"bold");nl(5.5);
     if(d.groc>0)row("Groceries",fmt(d.groc)+"/mo");
     if(d.dining>0)row("Dining out",fmt(d.dining)+"/mo");
     if(d.ent>0)row("Entertainment",fmt(d.ent)+"/mo");
@@ -1741,8 +1739,8 @@ function StepResults({data,onBack,onNext,onRestart}){
     if(mccMo>0){
       safe();
       fillRect(M,y,CW,6,GRNL);
-      txt("MCC tax credit (at filing)",M+2,y+3.5,8.5,GRN,"bold");
-      txt(`+ ${fmt(mccMo*12)}/yr saved on federal taxes`,W-M-2,y+3.5,8.5,GRN,"bold","right");
+      txt("MCC tax credit (at filing)",M+2,y+3.5,10,GRN,"bold");
+      txt(`+ ${fmt(mccMo*12)}/yr saved on federal taxes`,W-M-2,y+3.5,10,GRN,"bold","right");
       nl(10);
     }
 
@@ -1756,19 +1754,19 @@ function StepResults({data,onBack,onNext,onRestart}){
     safe();
     // Side-by-side comparison boxes
     fillRect(M,y,colW,36,GRNL);strokeRect(M,y,colW,36,GRN,0.4);
-    txt("BUY NOW",M+colW/2,y+6,8,GRN,"bold","center");
+    txt("BUY NOW",M+colW/2,y+6,9,GRN,"bold","center");
     txt(fmt(d.price),M+colW/2,y+14,13,GRN,"bold","center");
-    txt("P&I: "+fmt(piMo)+"/mo",M+colW/2,y+21,8,GRNM,"normal","center");
-    txt("Rate: "+ar.toFixed(2)+"%",M+colW/2,y+27,8,GRNM,"normal","center");
-    txt("Today's opportunity",M+colW/2,y+33,7,[100,170,130],"normal","center");
+    txt("P&I: "+fmt(piMo)+"/mo",M+colW/2,y+21,9,GRNM,"normal","center");
+    txt("Rate: "+ar.toFixed(2)+"%",M+colW/2,y+27,9,GRNM,"normal","center");
+    txt("Today's opportunity",M+colW/2,y+33,8,[100,170,130],"normal","center");
 
     const bx=M+colW+4;
     fillRect(bx,y,colW,36,REDL);strokeRect(bx,y,colW,36,RED,0.4);
-    txt("WAIT 1 YEAR",bx+colW/2,y+6,8,RED,"bold","center");
+    txt("WAIT 1 YEAR",bx+colW/2,y+6,9,RED,"bold","center");
     txt(fmt(fp1),bx+colW/2,y+14,13,RED,"bold","center");
-    txt("P&I: "+fmt(fp1i)+"/mo",bx+colW/2,y+21,8,RED,"normal","center");
-    txt("Rate: ~"+(ar+.1).toFixed(2)+"%",bx+colW/2,y+27,8,RED,"normal","center");
-    txt("+ "+fmt(fp1-d.price)+" more",bx+colW/2,y+33,7,[200,60,60],"normal","center");
+    txt("P&I: "+fmt(fp1i)+"/mo",bx+colW/2,y+21,9,RED,"normal","center");
+    txt("Rate: ~"+(ar+.1).toFixed(2)+"%",bx+colW/2,y+27,9,RED,"normal","center");
+    txt("+ "+fmt(fp1-d.price)+" more",bx+colW/2,y+33,8,[200,60,60],"normal","center");
     nl(40);
 
     row("Monthly payment increase if you wait",`+ ${fmt(fp1i-piMo)}/mo`,RED);
@@ -1786,12 +1784,12 @@ function StepResults({data,onBack,onNext,onRestart}){
         safe();
         const schoolColor=h.schools>=8?GRN:h.schools>=6?AMB:RED;
         fillRect(M,y-1,CW,5,i%2===0?G1:[248,250,252]);
-        txt(h.name,M+2,y+2.5,9,CHR,"bold");
-        txt(`Schools: ${h.schools}/10`,W-M-2,y+2.5,8.5,schoolColor,"bold","right");
+        txt(h.name,M+2,y+2.5,10,CHR,"bold");
+        txt(`Schools: ${h.schools}/10`,W-M-2,y+2.5,10,schoolColor,"bold","right");
         nl(6);
-        txt(`${h.medianPrice}  |  ${h.commute}`,M+2,y,8,G5,"normal");
+        txt(`${h.medianPrice}  |  ${h.commute}`,M+2,y,9,G5,"normal");
         nl(5);
-        const lh=wrap(h.notes,M+2,y,CW-4,7.5,G7,"normal",3.8);
+        const lh=wrap(h.notes,M+2,y,CW-4,9,G7,"normal",4.2);
         nl(lh+3);
       });
     }
@@ -1802,17 +1800,17 @@ function StepResults({data,onBack,onNext,onRestart}){
     const climate=getClimate(loc.state);
     if(climate){
       sectionHead(`Climate Risk — ${loc.state}`,"");
-      wrap(`Always verify flood zone at msc.fema.gov for ZIP ${loc.zip||"your area"} before purchasing. Get insurance quotes before making any offer.`,M,y,CW,8,AMB,"normal",4);
+      wrap(`Always verify flood zone at msc.fema.gov for ZIP ${loc.zip||"your area"} before purchasing. Get insurance quotes before making any offer.`,M,y,CW,10,AMB,"normal",4.8);
       nl(10);
       const riskColor=(r)=>r==="Extreme"||r==="Very High"?RED:r==="High"?AMB:r==="Moderate"||r==="Low-Moderate"?GRNM:GRN;
       const riskBg=(r)=>r==="Extreme"||r==="Very High"?REDL:r==="High"?AMBL:GRNL;
       Object.entries(climate).filter(([,v])=>v.risk!=="None").forEach(([key,val])=>{
         safe();
         fillRect(M,y-1,CW,6,riskBg(val.risk));
-        txt(`${key.charAt(0).toUpperCase()+key.slice(1)} Risk`,M+2,y+3,8.5,riskColor(val.risk),"bold");
-        txt(val.risk,W-M-2,y+3,8.5,riskColor(val.risk),"bold","right");
+        txt(`${key.charAt(0).toUpperCase()+key.slice(1)} Risk`,M+2,y+3,10,riskColor(val.risk),"bold");
+        txt(val.risk,W-M-2,y+3,10,riskColor(val.risk),"bold","right");
         nl(7);
-        const lh=wrap(val.detail,M+2,y,CW-4,7.5,G7,"normal",3.8);
+        const lh=wrap(val.detail,M+2,y,CW-4,9,G7,"normal",4.2);
         nl(lh+4);
       });
     }
@@ -1839,7 +1837,7 @@ function StepResults({data,onBack,onNext,onRestart}){
       fillRect(0,y-2,W,10,bg);
       doc.setDrawColor(...accent);doc.setLineWidth(1.5);doc.line(0,y-2,0,y+8);
       txt(cur.label,M,y+4,11,accent,"bold");
-      txt(cur.desc,W-M,y+4,8,G5,"normal","right");
+      txt(cur.desc,W-M,y+4,9,G5,"normal","right");
       nl(14);
 
       const urgentTasks=cur.tasks.filter(t=>t.urgent);
@@ -1869,7 +1867,7 @@ function StepResults({data,onBack,onNext,onRestart}){
     // NEGOTIATION GUIDE
     // ════════════════════════════════════════════════════════════════════════
     sectionHead("Negotiation Guide","");
-    wrap("Everything below is negotiable — most buyers leave money on the table by not asking. Your agent works for you; these are the levers you control.",M,y,CW,8.5,G7,"normal",4);
+    wrap("Everything below is negotiable — most buyers leave money on the table by not asking. Your agent works for you; these are the levers you control.",M,y,CW,10,G7,"normal",4.8);
     nl(12);
 
     const negSections=[
@@ -1932,14 +1930,14 @@ function StepResults({data,onBack,onNext,onRestart}){
       safe();
       fillRect(M,y-1,CW,6,si%2===0?G1:[248,250,252]);
       doc.setDrawColor(...GRN);doc.setLineWidth(0.8);doc.line(M,y-1,M,y+5);
-      txt(sec.title,M+4,y+3,9,CHR,"bold");
+      txt(sec.title,M+4,y+3,10,CHR,"bold");
       nl(8);
       sec.items.forEach(item=>{
         safe();
         // Bullet dot positioned at the hanging indent column
         doc.setFillColor(...GRNM);doc.circle(M+3,y-0.5,1.2,"F");
         // Text starts at M+8, maxW shrinks accordingly so wrapped lines stay aligned
-        const lh=wrap(item,M+8,y,CW-10,8,G7,"normal",4.2);
+        const lh=wrap(item,M+8,y,CW-10,10,G7,"normal",4.8);
         nl(lh+3);
       });
       nl(3);
