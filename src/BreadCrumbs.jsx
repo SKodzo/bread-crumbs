@@ -369,6 +369,61 @@ const NEIGHBORHOODS_DB={
 };
 const getNeighborhoods=city=>NEIGHBORHOODS_DB[city]||null;
 
+// Reconstruct calc function from the serialized calcSpec returned by /api/programs
+function calcFromSpec(spec,price){
+  if(!spec)return 0;
+  if(spec.t==="pct")return Math.round(price*spec.r);
+  if(spec.t==="fixed")return spec.v;
+  return 0;
+}
+
+// Async hook: fetch programs from serverless API, fall back to local on error
+function usePrograms(loc,data){
+  const[programs,setPrograms]=React.useState(null);
+  const[loading,setLoading]=React.useState(false);
+  React.useEffect(()=>{
+    if(!loc?.state){setPrograms([]);return;}
+    setLoading(true);
+    const params=new URLSearchParams({
+      state:loc.state||"",city:loc.city||"",county:loc.county||"",
+      profession:data.profession||"none",isVet:String(!!data.isVet),
+      income:String(data.income||0),householdSize:String(data.householdSize||1),
+    });
+    fetch(`/api/programs?${params}`)
+      .then(r=>{if(!r.ok)throw new Error();return r.json();})
+      .then(json=>{
+        const rebuilt=json.programs.map(p=>({
+          ...p,calc:price=>calcFromSpec(p.calcSpec,price),
+        }));
+        setPrograms(rebuilt);
+      })
+      .catch(()=>{
+        setPrograms(getProgramsForLocation(
+          loc.state,loc.city,loc.county,
+          data.profession,data.isVet,data.income,data.householdSize||1
+        ));
+      })
+      .finally(()=>setLoading(false));
+  },[loc?.state,loc?.city,loc?.county,data.profession,data.isVet,data.income,data.householdSize]);
+  return{programs:programs||[],loading};
+}
+
+// Loading skeleton for programs list
+function ProgramsSkeleton(){
+  return(
+    <div>
+      {[...Array(5)].map((_,i)=>(
+        <div key={i} style={{borderRadius:12,padding:"14px 12px",marginBottom:10,background:"#F3F4F6",animation:"pulse 1.5s ease-in-out infinite"}}>
+          <div style={{height:10,width:"60%",borderRadius:6,background:"#E5E7EB",marginBottom:8}}/>
+          <div style={{height:8,width:"80%",borderRadius:6,background:"#E5E7EB",marginBottom:6}}/>
+          <div style={{height:8,width:"40%",borderRadius:6,background:"#E5E7EB"}}/>
+        </div>
+      ))}
+      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}`}</style>
+    </div>
+  );
+}
+
 function getProgramsForLocation(state,city,county,profession="none",isVet=false,income=0,householdSize=1){
   const st=(state||"").toUpperCase();
   const ci=(city||"").toLowerCase();
@@ -829,7 +884,7 @@ function StepLocation({data,setData,onNext}){
     setLoading(false);
   };
   const confirm=()=>{setData({...data,zip,locationInfo:locInfo});onNext();};
-  const progs=locInfo?getProgramsForLocation(locInfo.state,locInfo.city,locInfo.county,data.profession,data.isVet,data.income,data.householdSize||1):[];
+  const {programs:progs}=usePrograms(locInfo,data);
   const layers={federal:0,state:0,city:0,heroes:0};
   progs.forEach(p=>{if(layers[p.layer]!==undefined)layers[p.layer]++;});
   const crime=locInfo?getCrime(locInfo.city):null;
@@ -1138,7 +1193,7 @@ function StepLoan({data,setData,onNext,onBack}){
 function StepPrograms({data,setData,onNext,onBack}){
   const d=data;
   const loc=d.locationInfo||{};
-  const allP=getProgramsForLocation(loc.state,loc.city,loc.county,d.profession,d.isVet,d.income,d.householdSize||1);
+  const{programs:allP,loading:progsLoading}=usePrograms(loc,d);
   const incompat=new Set();
   const estimatedAssets=((d.k401||0)+(d.roth||0)+(d.hsa||0));
   const harveyAssetCap=75000;
@@ -1167,7 +1222,8 @@ function StepPrograms({data,setData,onNext,onBack}){
       <p style={{fontSize:13,color:C.gray700,marginBottom:12,lineHeight:1.6}}>
         Programs are grouped by funding layer. Select any you may qualify for — incompatible programs grey out automatically. Stacked programs cover your down payment and closing costs first, then reduce your loan balance.
       </p>
-      {layers.map(layer=>{
+      {progsLoading&&<ProgramsSkeleton/>}
+      {!progsLoading&&layers.map(layer=>{
         const lp=allP.filter(p=>p.layer===layer.id);
         if(!lp.length)return null;
         return(
@@ -1199,6 +1255,7 @@ function StepPrograms({data,setData,onNext,onBack}){
           </div>
         );
       })}
+      {progsLoading&&null}
       <Card>
         <SecTitle>Your stacked total</SecTitle>
         <InfoRow label="Total assistance" value={totalAssist>0?fmt(totalAssist):"$0 — select programs above"} valueColor={totalAssist>0?C.green:C.gray500}/>
@@ -1352,7 +1409,7 @@ function StepResults({data,onBack,onNext,onRestart}){
   const trueTakeHome=grossMo-taxFICA-pretaxMo-rothmo;
   const ar=d.loanType==="fha"?6.48:d.loanType==="va"?6.17:convRate(d.score,d.dpPct);
   const dp=d.price*d.dpPct/100;
-  const allP=getProgramsForLocation(loc.state,loc.city,loc.county,d.profession,d.isVet,d.income,d.householdSize||1);
+  const{programs:allP}=usePrograms(loc,d);
   const totalAssist=allP.filter(p=>d.programs.includes(p.id)).reduce((s,p)=>s+p.calc(d.price),0);
   const fhaUp=d.loanType==="fha"?(d.price-dp)*0.0175:0;
   const cashNeeded=dp+d.price*0.03+1000+fhaUp;
@@ -2195,7 +2252,7 @@ function StepUnderwriting({data,onNext,onBack}){
   const d=data;
   const loc=d.locationInfo||{};
   const grossMo=Math.round((d.income+(d.alimony||0))/12);
-  const allP=getProgramsForLocation(loc.state,loc.city,loc.county,d.profession,d.isVet,d.income,d.householdSize||1);
+  const{programs:allP}=usePrograms(loc,d);
   const totalAssist=allP.filter(p=>d.programs.includes(p.id)).reduce((s,p)=>s+p.calc(d.price),0);
   const dp=d.price*d.dpPct/100;
   const fhaUp=d.loanType==="fha"?(d.price-dp)*0.0175:0;
