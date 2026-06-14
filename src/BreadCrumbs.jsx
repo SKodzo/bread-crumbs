@@ -389,9 +389,24 @@ function getProgramsForLocation(state,city,county,profession="none",isVet=false,
     progs.push({id:"tsahc",name:"TSAHC Home Sweet Texas",short:"Up to 5% DPA grant, no repayment",amount:"Up to 5%",badge:"State",layer:"state",calc:p=>Math.round(p*.05),incompat:["tdhca"],note:"Income limit varies by county. tsahc.org",url:"https://www.tsahc.org"});
     progs.push({id:"tdhca",name:"My First Texas Home (TDHCA)",short:"5% DPA + below-market rate",amount:"5% of loan",badge:"State",layer:"state",calc:p=>Math.round(p*.05),incompat:["tsahc"],note:"30-yr fixed below-market rate. tdhca.state.tx.us",url:"https://www.tdhca.texas.gov"});
     progs.push({id:"mcc_tx",name:"Texas MCC",short:"15% of interest back as tax credit/yr",amount:"~$1,400+/yr",badge:"Federal",layer:"federal",calc:()=>0,incompat:[],note:"Reinstated March 2026. First-time buyers only.",url:"https://www.tsahc.org",expires:"Reinstated Mar 2026 — verify active"});
+    // SETH 5 Star — Harris + surrounding 8-county area, repeat buyers OK
+    if(co.includes("harris")||co.includes("fort bend")||co.includes("montgomery")||co.includes("brazoria")||co.includes("galveston")||co.includes("liberty")||co.includes("chambers")||co.includes("waller")){
+      progs.push({id:"seth5star",name:"SETH 5 Star Program",short:"Up to 5% DPA, repeat buyers OK, 620+ FICO",amount:"Up to 5%",badge:"Regional",layer:"city",calc:p=>Math.round(p*.05),incompat:[],note:"Southeast Texas Housing Finance Corp. 8-county Houston metro. $122,100 income limit (all household earners). 620+ FICO. Repeat buyers allowed. seth.org",url:"https://www.seth.org/homebuyers/5-star-texas-advantage-program"});
+    }
+    // TDHCA My Choice Texas Home — statewide, repeat buyers OK
+    progs.push({id:"mychoicetx",name:"TDHCA My Choice Texas Home",short:"5% DPA, statewide, repeat buyers OK",amount:"5% of loan",badge:"State",layer:"state",calc:p=>Math.round(p*.05),incompat:[],note:"Statewide TDHCA program. Unlike My First Texas Home, repeat buyers are eligible. $122,100 income limit. 620+ FICO. 30-yr fixed below-market rate. tdhca.texas.gov",url:"https://www.tdhca.texas.gov/homeownership/mychoice/"});
+    // Chenoa Fund — national, no AMI cap, repeat buyers OK
+    progs.push({id:"chenoa",name:"Chenoa Fund",short:"3.5–5% DPA nationally, no AMI cap",amount:"3.5–5%",badge:"National",layer:"federal",calc:p=>Math.round(p*.035),incompat:[],note:"National program via CBC Mortgage Agency. No income limit. 600+ FICO (620+ for best terms). Repeat buyers OK. FHA-backed DPA — forgivable or repayable options. chenoafund.org",url:"https://chenoafund.org"});
     if(ci.includes("houston")||co.includes("harris")){
-      progs.push({id:"hap",name:"City of Houston HAP",short:"Up to $30K forgivable, city limits",amount:"Up to $30K",badge:"City",layer:"city",calc:()=>30000,incompat:["harvey"],note:"Inside Houston city limits. 80% AMI limit. Forgiven after 5 years.",url:"https://houstontx.gov/housing/hap.html",amiLimit:houstonAMI*0.80,expires:"Annual cycle — verify availability"});
-      progs.push({id:"harvey",name:"Harvey HbAP 2.0",short:"Up to $125K if Houston resident 8/25/17",amount:"Up to $125K",badge:"City",layer:"city",calc:()=>125000,incompat:["hap"],note:"Call 832-393-0550 first. 120% AMI limit. Avoid June 18–July 11.",url:"https://houstontx.gov/housing/",amiLimit:houstonAMI*1.20,expires:"Rolling — call to confirm funds"});
+      progs.push({id:"hap",name:"City of Houston HAP",short:"Up to $30K forgivable, city limits",amount:"Up to $30K",badge:"City",layer:"city",calc:()=>30000,incompat:["harvey","hap2"],note:"Inside Houston city limits. 80% AMI limit. Forgiven after 5 years.",url:"https://houstontx.gov/housing/hap.html",amiLimit:houstonAMI*0.80,expires:"Annual cycle — verify availability"});
+      progs.push({id:"harvey",name:"Harvey HbAP 2.0",short:"Up to $125K if Houston resident 8/25/17",amount:"Up to $125K",badge:"City",layer:"city",calc:()=>125000,incompat:["hap","hap2"],note:"Call 832-393-0550 first. 120% AMI limit. Avoid June 18–July 11.",url:"https://houstontx.gov/housing/",amiLimit:houstonAMI*1.20,expires:"Rolling — call to confirm funds"});
+      // City of Houston HAP 2.0 Expanded — Houston taxpayers, 120% AMI, first-time only
+      progs.push({id:"hap2",name:"City of Houston HAP 2.0 Expanded",short:"Up to $30K, 120% AMI, Houston taxpayers",amount:"Up to $30K",badge:"City",layer:"city",calc:()=>30000,incompat:["hap","harvey"],note:"Houston property taxpayers. First-time buyers only. 120% AMI limit (higher than original HAP). Front-end DTI max 33%, back-end DTI max 45%. houstontx.gov/housing",url:"https://houstontx.gov/housing/hap.html",amiLimit:houstonAMI*1.20,expires:"Annual cycle — verify availability"});
+      // Harris County CDBG DPA — unincorporated Harris only, first-time, 80% AMI, $30K asset cap
+      const harrisCDBGLimit=income>0&&income<=houstonAMI*0.80;
+      progs.push({id:"harris_cdbg",name:"Harris County CDBG DPA",short:"Up to $23,800, unincorporated Harris only",amount:"Up to $23,800",badge:"County",layer:"city",calc:()=>23800,incompat:[],note:"Unincorporated Harris County ONLY (not inside Houston city limits). First-time buyers. 80% AMI income limit ($"+Math.round(houstonAMI*0.80).toLocaleString()+" for "+hs+"-person household). $30,000 asset cap — if assets exceed $30K you may be disqualified. 580+ FICO. hcdd.hctx.net",url:"https://www.hcdd.hctx.net/homeownership",amiLimit:houstonAMI*0.80,assetCap:30000});
+      // Harris County SFARFI — first-time, 80% AMI, FE 39%, DTI 42%
+      progs.push({id:"harris_sfarfi",name:"Harris County SFARFI",short:"Down payment + closing cost help, 620+ FICO",amount:"Varies",badge:"County",layer:"city",calc:()=>10000,incompat:[],note:"Harris County Single Family Affordable Rehab Finance Initiative. First-time buyers. 80% AMI limit. 620+ FICO. Front-end DTI max 39%, back-end DTI max 42%. hcdd.hctx.net",url:"https://www.hcdd.hctx.net/homeownership",amiLimit:houstonAMI*0.80});
     }
     if(ci.includes("dallas")||co.includes("dallas")){
       progs.push({id:"dhap",name:"Dallas Homebuyer Assistance",short:"Up to $60K forgivable",amount:"Up to $60K",badge:"City",layer:"city",calc:()=>60000,incompat:[],note:"Dallas city limits. 80% AMI limit.",url:"https://dallascityhall.com/departments/housing"});
@@ -1038,8 +1053,8 @@ function StepLoan({data,setData,onNext,onBack}){
   const terms=[
     {id:360,label:"30-yr fixed",note:"Lowest monthly payment"},
     {id:180,label:"15-yr fixed",note:"Less interest, higher payment"},
-    {id:"5arm",label:"5/1 ARM",note:"Fixed 5 yrs, then adjusts"},
-    {id:"7arm",label:"7/1 ARM",note:"Fixed 7 yrs, then adjusts"},
+    {id:"5arm",label:"5/1 ARM (Adjustable-Rate Mortgage)",note:"Fixed interest rate for the first 5 years, then adjusts once every year after."},
+    {id:"7arm",label:"7/1 ARM (Adjustable-Rate Mortgage)",note:"Fixed interest rate for the first 7 years, then adjusts once every year after."},
   ];
   return(
     <div>
@@ -2295,7 +2310,7 @@ export default function App(){
       <div style={{background:C.white,borderBottom:`1px solid ${C.gray100}`,padding:"12px 16px",position:"sticky",top:0,zIndex:100}}>
         <div style={{maxWidth:600,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <span style={{fontSize:22}}>🍞</span>
+            <img src="/logo.png" alt="Bread Crumbs" style={{height:28,width:"auto",display:"block"}}/>
             <span style={{fontSize:18,fontWeight:900,color:C.green,letterSpacing:"-0.02em"}}>Bread Crumbs</span>
           </div>
           <div style={{fontSize:11,color:C.gray500,fontWeight:600}}>Step {step} of {STEPS.length}</div>
@@ -2306,8 +2321,8 @@ export default function App(){
           <div style={{display:"flex",alignItems:"center"}}>
             {STEPS.map((s,i)=>(
               <div key={s.id} style={{display:"flex",alignItems:"center",flex:i<STEPS.length-1?1:0}}>
-                <div onClick={()=>s.id<step&&goTo(s.id)} title={s.label}
-                  style={{width:28,height:28,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:s.id<=step?13:11,background:s.id<step?C.green:s.id===step?C.green:C.gray100,color:s.id<=step?C.white:C.gray500,fontWeight:700,cursor:s.id<step?"pointer":"default",flexShrink:0,border:s.id===step?`3px solid ${C.greenMid}`:"none",boxShadow:s.id===step?`0 0 0 3px ${C.greenLight}`:"none"}}>
+                <div onClick={()=>s.id<=step&&goTo(s.id)} title={s.label}
+                  style={{width:28,height:28,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:s.id<=step?13:11,background:s.id<step?C.green:s.id===step?C.green:C.gray100,color:s.id<=step?C.white:C.gray500,fontWeight:700,cursor:s.id<=step?"pointer":"default",pointerEvents:s.id>step?"none":"auto",flexShrink:0,border:s.id===step?`3px solid ${C.greenMid}`:"none",boxShadow:s.id===step?`0 0 0 3px ${C.greenLight}`:"none"}}>
                   {s.id<step?"✓":s.icon}
                 </div>
                 {i<STEPS.length-1&&<div style={{flex:1,height:2,background:s.id<step?C.green:C.gray100,margin:"0 2px"}}/>}
