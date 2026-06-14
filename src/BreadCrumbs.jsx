@@ -1407,7 +1407,8 @@ function StepResults({data,onBack,onNext,onRestart}){
     // ── Helpers ──────────────────────────────────────────────────────────────
     const nl=(n=5)=>{y+=n;};
     const newPage=()=>{doc.addPage();y=M;};
-    const safe=(n=6)=>{if(y>272){newPage();}};
+    const safe=(n=6)=>{if(y>260){newPage();}};
+    const stripEmoji=s=>String(s||"").replace(/[\uD800-\uDFFF]|️/g,"").trim();
 
     const fillRect=(x,ry,w,h,rgb)=>{doc.setFillColor(...rgb);doc.rect(x,ry,w,h,"F");};
     const strokeRect=(x,ry,w,h,rgb,lw=0.3)=>{doc.setDrawColor(...rgb);doc.setLineWidth(lw);doc.rect(x,ry,w,h,"S");};
@@ -1427,21 +1428,21 @@ function StepResults({data,onBack,onNext,onRestart}){
     // Labeled data row with divider
     const row=(label,val,valRgb=CHR,indent=0)=>{
       safe();
-      txt(label,M+indent,y,8.5,G5);
-      txt(val,W-M,y,8.5,valRgb,"bold","right");
-      nl(5);
-      hline(y);nl(0.5);
+      txt(label,M+indent,y,8,G5);
+      txt(val,W-M,y,9,valRgb,"bold","right");
+      nl(6);
+      hline(y);nl(1.5);
     };
 
     // Section header — green pill badge left, title right of it
     const sectionHead=(title,emoji="")=>{
       safe();
-      if(y>M+5)nl(4);
-      fillRect(M,y-4,CW,8,GRNL);
-      doc.setDrawColor(...GRN);doc.setLineWidth(0.4);
-      doc.line(M,y-4,M,y+4);
-      txt(emoji+" "+title,M+3,y+0.5,10,GRN,"bold");
-      nl(8);
+      if(y>M+5)nl(8);
+      fillRect(M,y-4,CW,9,GRNL);
+      doc.setDrawColor(...GRN);doc.setLineWidth(1);
+      doc.line(M,y-4,M,y+5);
+      txt((emoji?emoji+" ":"")+title,M+5,y+1,11,GRN,"bold");
+      nl(10);
     };
 
     // Stat card — filled box with label + big value
@@ -1452,15 +1453,28 @@ function StepResults({data,onBack,onNext,onRestart}){
       txt(value,x2+w2/2,ry2+10.5,9.5,rgb,"bold","center");
     };
 
-    // Checklist task row
+    // Checklist task row — clean to-do card
     const taskRow=(task,accent)=>{
-      safe();
-      const box=M+1;
-      doc.setDrawColor(...accent);doc.setLineWidth(0.4);
-      doc.rect(box,y-3,3.5,3.5,"S");
-      const bullet=task.urgent?"! ":"  ";
-      const h=wrap(bullet+task.text,M+6,y,CW-8,8,task.urgent?RED:G7,"normal",4);
-      nl(h+1);
+      safe(16);
+      const rowH=14;
+      // Row background
+      fillRect(M,y-3,CW,rowH,task.urgent?[255,248,248]:[249,250,251]);
+      strokeRect(M,y-3,CW,rowH,[220,225,230],0.15);
+      // Checkbox circle (left margin)
+      const cx=M+5,cy=y+3.5;
+      doc.setDrawColor(...accent);doc.setLineWidth(0.6);
+      doc.circle(cx,cy,3,"S");
+      // Urgent: filled dot inside circle
+      if(task.urgent){doc.setFillColor(...accent);doc.circle(cx,cy,1.5,"F");}
+      // Category label (small caps, right of circle)
+      const rawCat=stripEmoji(task.cat);
+      if(rawCat){
+        doc.setFont("helvetica","bold");doc.setFontSize(6);doc.setTextColor(...G5);
+        doc.text(rawCat.toUpperCase(),M+11,y+0.5);
+      }
+      // Task text
+      const h=wrap(task.text,M+11,y+rawCat?4.5:1.5,CW-14,8,task.urgent?CHR:G7,"normal",4.2);
+      nl(h+rawCat?10:7);
     };
 
     // ── Add footer to every page after building ──────────────────────────────
@@ -1748,27 +1762,15 @@ function StepResults({data,onBack,onNext,onRestart}){
 
       if(urgentTasks.length){
         safe();
-        txt("HIGH PRIORITY",M,y,7,RED,"bold");nl(5);
-        urgentTasks.forEach(task=>{
-          safe();
-          fillRect(M,y-3.5,2,4.5,RED);
-          const lh=wrap(task.text,M+5,y,CW-6,8,CHR,"normal",4);
-          if(task.cat){txt(task.cat,M+5,y-3.2,6.5,RED,"normal");}
-          nl(lh+3);
-        });
+        txt("● HIGH PRIORITY",M,y,7.5,RED,"bold");nl(6);
+        urgentTasks.forEach(task=>taskRow(task,RED));
         nl(2);
       }
 
       if(otherTasks.length){
         safe();
-        txt("REGULAR TASKS",M,y,7,G5,"bold");nl(5);
-        otherTasks.forEach(task=>{
-          safe();
-          doc.setDrawColor(...G3);doc.setLineWidth(0.3);doc.rect(M+1,y-3.5,3,3,"S");
-          const lh=wrap(task.text,M+6,y,CW-7,8,G7,"normal",4);
-          if(task.cat){txt(task.cat,M+6,y-3.5,6.5,G5,"normal");}
-          nl(lh+3);
-        });
+        txt("○ TO DO",M,y,7.5,G5,"bold");nl(6);
+        otherTasks.forEach(task=>taskRow(task,G3));
       }
       nl(6);
     });
@@ -1844,9 +1846,11 @@ function StepResults({data,onBack,onNext,onRestart}){
       nl(8);
       sec.items.forEach(item=>{
         safe();
-        fillRect(M+1,y-0.5,1.5,1.5,GRNM);
-        const lh=wrap(item,M+5,y,CW-6,8,G7,"normal",4);
-        nl(lh+2);
+        // Bullet dot positioned at the hanging indent column
+        doc.setFillColor(...GRNM);doc.circle(M+3,y-0.5,1.2,"F");
+        // Text starts at M+8, maxW shrinks accordingly so wrapped lines stay aligned
+        const lh=wrap(item,M+8,y,CW-10,8,G7,"normal",4.2);
+        nl(lh+3);
       });
       nl(3);
     });
@@ -2304,6 +2308,7 @@ const DEFAULT={
 export default function App(){
   const [step,setStep]=useState(1);
   const [data,setData]=useState(DEFAULT);
+  const [hoveredStep,setHoveredStep]=useState(null);
   const goTo=s=>{setStep(s);window.scrollTo(0,0);};
   return(
     <div style={{background:C.cream,minHeight:"100vh",fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",color:C.charcoal}}>
@@ -2320,16 +2325,23 @@ export default function App(){
         <div style={{maxWidth:600,margin:"0 auto"}}>
           <div style={{display:"flex",alignItems:"center"}}>
             {STEPS.map((s,i)=>(
-              <div key={s.id} style={{display:"flex",alignItems:"center",flex:i<STEPS.length-1?1:0}}>
-                <div onClick={()=>s.id<=step&&goTo(s.id)} title={s.label}
+              <div key={s.id} style={{display:"flex",alignItems:"center",flex:i<STEPS.length-1?1:0,position:"relative"}}>
+                <div
+                  onClick={()=>s.id<=step&&goTo(s.id)}
+                  onMouseEnter={()=>setHoveredStep(s.id)}
+                  onMouseLeave={()=>setHoveredStep(null)}
                   style={{width:28,height:28,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:s.id<=step?13:11,background:s.id<step?C.green:s.id===step?C.green:C.gray100,color:s.id<=step?C.white:C.gray500,fontWeight:700,cursor:s.id<=step?"pointer":"default",pointerEvents:s.id>step?"none":"auto",flexShrink:0,border:s.id===step?`3px solid ${C.greenMid}`:"none",boxShadow:s.id===step?`0 0 0 3px ${C.greenLight}`:"none"}}>
                   {s.id<step?"✓":s.icon}
                 </div>
+                {hoveredStep===s.id&&(
+                  <div style={{position:"absolute",top:34,left:"50%",transform:"translateX(-50%)",background:C.charcoal,color:C.white,fontSize:10,fontWeight:600,padding:"3px 9px",borderRadius:6,whiteSpace:"nowrap",zIndex:200,pointerEvents:"none",boxShadow:"0 2px 8px rgba(0,0,0,0.18)"}}>
+                    {s.label}
+                  </div>
+                )}
                 {i<STEPS.length-1&&<div style={{flex:1,height:2,background:s.id<step?C.green:C.gray100,margin:"0 2px"}}/>}
               </div>
             ))}
           </div>
-          <div style={{marginTop:5,textAlign:"center",fontSize:11,color:C.gray500,fontWeight:600}}>{STEPS[step-1].label}</div>
         </div>
       </div>
       <div style={{maxWidth:600,margin:"0 auto",padding:"16px 14px 40px"}}>
