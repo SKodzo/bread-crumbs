@@ -1510,28 +1510,56 @@ function StepResults({data,onBack,onNext,onRestart}){
       txt(value,x2+w2/2,ry2+10.5,9.5,rgb,"bold","center");
     };
 
-    // Checklist task row — clean to-do card
+    // ── Figma-inspired 2-column checklist row ────────────────────────────────
+    // Col 1 (8mm fixed): circle checkbox, vertically centered to first text line
+    // Col 2 (flex):      task text (medium weight) + category subtext (light, muted)
     const taskRow=(task,accent)=>{
-      safe(16);
-      const rowH=14;
-      // Row background
-      fillRect(M,y-3,CW,rowH,task.urgent?[255,248,248]:[249,250,251]);
-      strokeRect(M,y-3,CW,rowH,[220,225,230],0.15);
-      // Checkbox circle (left margin)
-      const cx=M+5,cy=y+3.5;
-      doc.setDrawColor(...accent);doc.setLineWidth(0.6);
-      doc.circle(cx,cy,3,"S");
-      // Urgent: filled dot inside circle
-      if(task.urgent){doc.setFillColor(...accent);doc.circle(cx,cy,1.5,"F");}
-      // Category label (small caps, right of circle)
+      const CB_X=M+4;          // checkbox circle center-x
+      const CB_W=9;            // column 1 width (mm)
+      const TEXT_X=M+CB_W;    // column 2 start-x
+      const TEXT_W=CW-CB_W-1; // column 2 width
+      const PAD_V=3.5;         // vertical padding top/bottom inside row
+      const LINE_H=4.4;        // main text line height (mm)
+      const SUB_H=3.8;         // subtext line height
+
+      // Pre-measure text to size the row correctly
+      doc.setFont("helvetica","bold");doc.setFontSize(8.5);
+      const mainLines=doc.splitTextToSize(String(task.text),TEXT_W);
       const rawCat=stripEmoji(task.cat);
-      if(rawCat){
-        doc.setFont("helvetica","bold");doc.setFontSize(6);doc.setTextColor(...G5);
-        doc.text(rawCat.toUpperCase(),M+11,y+0.5);
+      const subLines=rawCat?(doc.setFont("helvetica","normal"),doc.setFontSize(7),doc.splitTextToSize(rawCat,TEXT_W)):[];
+      const mainH=mainLines.length*LINE_H;
+      const subH=subLines.length>0?subLines.length*SUB_H+1.5:0;
+      const rowH=mainH+subH+PAD_V*2;
+
+      safe(rowH+4);
+
+      // Row: alternating subtle fill + single bottom rule
+      fillRect(M,y,CW,rowH,[250,251,252]);
+      doc.setDrawColor(220,224,228);doc.setLineWidth(0.18);
+      doc.line(M,y+rowH,M+CW,y+rowH);
+
+      // Checkbox circle — centered on the first text line baseline
+      const cbCY=y+PAD_V+(LINE_H*0.65);
+      doc.setDrawColor(...(task.urgent?RED:[180,186,194]));
+      doc.setLineWidth(task.urgent?0.7:0.5);
+      doc.circle(CB_X,cbCY,2.8,"S");
+      // Urgent: filled accent dot inside
+      if(task.urgent){doc.setFillColor(...RED);doc.circle(CB_X,cbCY,1.4,"F");}
+
+      // Main task text — bold, charcoal (or red if urgent)
+      doc.setFont("helvetica","bold");doc.setFontSize(8.5);
+      doc.setTextColor(...(task.urgent?RED:CHR));
+      doc.text(mainLines,TEXT_X,y+PAD_V+LINE_H*0.85);
+
+      // Subtext (category) — regular, muted gray, smaller
+      if(subLines.length>0){
+        const subY=y+PAD_V+mainH+1.5+SUB_H*0.85;
+        doc.setFont("helvetica","normal");doc.setFontSize(7);
+        doc.setTextColor(...G5);
+        doc.text(subLines,TEXT_X,subY);
       }
-      // Task text
-      const h=wrap(task.text,M+11,y+rawCat?4.5:1.5,CW-14,8,task.urgent?CHR:G7,"normal",4.2);
-      nl(h+rawCat?10:7);
+
+      y+=rowH;
     };
 
     // ── Add footer to every page after building ──────────────────────────────
@@ -1819,15 +1847,20 @@ function StepResults({data,onBack,onNext,onRestart}){
 
       if(urgentTasks.length){
         safe();
-        txt("● HIGH PRIORITY",M,y,7.5,RED,"bold");nl(6);
+        // Priority group label — pill badge style
+        fillRect(M,y,32,5.5,REDL);
+        txt("PRIORITY",M+3,y+3.8,6.5,RED,"bold");
+        nl(8);
         urgentTasks.forEach(task=>taskRow(task,RED));
-        nl(2);
+        nl(3);
       }
 
       if(otherTasks.length){
         safe();
-        txt("○ TO DO",M,y,7.5,G5,"bold");nl(6);
-        otherTasks.forEach(task=>taskRow(task,G3));
+        fillRect(M,y,22,5.5,G1);
+        txt("TO DO",M+3,y+3.8,6.5,G7,"bold");
+        nl(8);
+        otherTasks.forEach(task=>taskRow(task,[180,186,194]));
       }
       nl(6);
     });
