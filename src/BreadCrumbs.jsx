@@ -379,9 +379,9 @@ function calcFromSpec(spec,price){
 
 // Async hook: fetch programs from serverless API, fall back to local on error
 function usePrograms(loc,data){
-  const[programs,setPrograms]=React.useState(null);
-  const[loading,setLoading]=React.useState(false);
-  React.useEffect(()=>{
+  const[programs,setPrograms]=useState(null);
+  const[loading,setLoading]=useState(false);
+  useEffect(()=>{
     if(!loc?.state){setPrograms([]);return;}
     setLoading(true);
     const params=new URLSearchParams({
