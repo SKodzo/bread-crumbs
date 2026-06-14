@@ -2364,9 +2364,10 @@ const DEFAULT={
 
 export default function App(){
   const [step,setStep]=useState(1);
+  const [maxStep,setMaxStep]=useState(1);
   const [data,setData]=useState(DEFAULT);
   const [hoveredStep,setHoveredStep]=useState(null);
-  const goTo=s=>{setStep(s);window.scrollTo(0,0);};
+  const goTo=s=>{setStep(s);if(s>maxStep)setMaxStep(s);window.scrollTo(0,0);};
   return(
     <div style={{background:C.cream,minHeight:"100vh",fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",color:C.charcoal}}>
       <div style={{background:C.white,borderBottom:`1px solid ${C.gray100}`,padding:"12px 16px",position:"sticky",top:0,zIndex:100}}>
@@ -2384,10 +2385,24 @@ export default function App(){
             {STEPS.map((s,i)=>(
               <div key={s.id} style={{display:"flex",alignItems:"center",flex:i<STEPS.length-1?1:0,position:"relative"}}>
                 <div
-                  onClick={()=>s.id<=step&&goTo(s.id)}
-                  onMouseEnter={()=>setHoveredStep(s.id)}
+                  onClick={()=>s.id<=maxStep&&goTo(s.id)}
+                  onMouseEnter={()=>s.id<=maxStep&&setHoveredStep(s.id)}
                   onMouseLeave={()=>setHoveredStep(null)}
-                  style={{width:28,height:28,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:s.id<=step?13:11,background:s.id<step?C.green:s.id===step?C.green:C.gray100,color:s.id<=step?C.white:C.gray500,fontWeight:700,cursor:s.id<=step?"pointer":"default",pointerEvents:s.id>step?"none":"auto",flexShrink:0,border:s.id===step?`3px solid ${C.greenMid}`:"none",boxShadow:s.id===step?`0 0 0 3px ${C.greenLight}`:"none"}}>
+                  style={{
+                    width:28,height:28,borderRadius:"50%",
+                    display:"flex",alignItems:"center",justifyContent:"center",
+                    fontSize:s.id<=step?13:11,flexShrink:0,fontWeight:700,
+                    // background: completed=green, current=green, unlocked-future=white, locked=gray
+                    background:s.id<step?C.green:s.id===step?C.green:s.id<=maxStep?C.white:C.gray100,
+                    // color: completed/current=white, unlocked-future=green, locked=gray
+                    color:s.id<=step?C.white:s.id<=maxStep?C.green:C.gray500,
+                    // border: current=thick green, unlocked-future=thin green, others=none
+                    border:s.id===step?`3px solid ${C.greenMid}`:s.id<=maxStep&&s.id!==step?`2px solid ${C.green}`:"none",
+                    boxShadow:s.id===step?`0 0 0 3px ${C.greenLight}`:"none",
+                    cursor:s.id<=maxStep?"pointer":"default",
+                    pointerEvents:s.id>maxStep?"none":"auto",
+                    transition:"background 0.15s,border 0.15s",
+                  }}>
                   {s.id<step?"✓":s.icon}
                 </div>
                 {hoveredStep===s.id&&(
