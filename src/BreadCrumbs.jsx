@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import jsPDF from "jspdf";
 
 const C = {
@@ -383,13 +383,14 @@ function usePrograms(loc,data){
   const[loading,setLoading]=useState(false);
   useEffect(()=>{
     if(!loc?.state){setPrograms([]);return;}
+    const ctrl=new AbortController();
     setLoading(true);
     const params=new URLSearchParams({
       state:loc.state||"",city:loc.city||"",county:loc.county||"",
       profession:data.profession||"none",isVet:String(!!data.isVet),
       income:String(data.income||0),householdSize:String(data.householdSize||1),
     });
-    fetch(`/api/programs?${params}`)
+    fetch(`/api/programs?${params}`,{signal:ctrl.signal})
       .then(r=>{if(!r.ok)throw new Error();return r.json();})
       .then(json=>{
         const rebuilt=json.programs.map(p=>({
@@ -397,16 +398,31 @@ function usePrograms(loc,data){
         }));
         setPrograms(rebuilt);
       })
-      .catch(()=>{
+      .catch(err=>{
+        if(err.name==="AbortError")return;
         setPrograms(getProgramsForLocation(
           loc.state,loc.city,loc.county,
           data.profession,data.isVet,data.income,data.householdSize||1
         ));
       })
-      .finally(()=>setLoading(false));
+      .finally(()=>{if(!ctrl.signal.aborted)setLoading(false);});
+    return()=>ctrl.abort();
   },[loc?.state,loc?.city,loc?.county,data.profession,data.isVet,data.income,data.householdSize]);
   return{programs:programs||[],loading};
 }
+
+const PROGRAM_LAYERS=[
+  {id:"federal",label:"Federal",col:C.blue,bg:C.blueLight},
+  {id:"state",label:"State",col:C.green,bg:C.greenLight},
+  {id:"city",label:"City / County",col:"#065F46",bg:"#D1FAE5"},
+  {id:"heroes",label:"Heroes, Professions & Nonprofits",col:"#4C1D95",bg:"#EDE9FE"},
+];
+const CHECKLIST_TIMELINES=[
+  {id:"3mo",label:"3 months",emoji:"🚀",desc:"Final sprint"},
+  {id:"6mo",label:"6 months",emoji:"🏗️",desc:"Build foundation"},
+  {id:"12mo",label:"12 months",emoji:"🌱",desc:"Plant seeds"},
+];
+const riskColor=r=>r==="Extreme"||r==="Very High"?C.red:r==="High"?C.amber:r==="Moderate"||r==="Low-Moderate"?C.greenMid:C.green;
 
 // Loading skeleton for programs list
 function ProgramsSkeleton(){
@@ -759,7 +775,6 @@ const AcronymBar=({keys})=>{
 
 // Reusable climate card — shows zip-specific tool links first, state-level context below
 const ClimateCard=({climate,state,zip,compact=false})=>{
-  const riskColor=r=>r==="Extreme"||r==="Very High"?C.red:r==="High"?C.amber:r==="Moderate"||r==="Low-Moderate"?C.greenMid:C.green;
   const riskBg=r=>r==="Extreme"||r==="Very High"?C.redLight:r==="High"?C.amberLight:r==="Moderate"||r==="Low-Moderate"?"#FFF7ED":C.greenLight;
   // .gov primary sources listed first, trusted secondary below
   const zipTools=[
@@ -859,7 +874,7 @@ const CrimeCard=({crime,city,zip,compact=false})=>{
   );
 };
 
-function StepLocation({data,setData,onNext}){
+function StepLocation({data,setData,onNext,programs:progs=[]}){
   const [zip,setZip]=useState(data.zip||"");
   const [status,setStatus]=useState(data.zip?"found":"idle");
   const [locInfo,setLocInfo]=useState(data.locationInfo||null);
@@ -884,12 +899,9 @@ function StepLocation({data,setData,onNext}){
     setLoading(false);
   };
   const confirm=()=>{setData({...data,zip,locationInfo:locInfo});onNext();};
-  const {programs:progs}=usePrograms(locInfo,data);
-  const layers={federal:0,state:0,city:0,heroes:0};
-  progs.forEach(p=>{if(layers[p.layer]!==undefined)layers[p.layer]++;});
+  const layers=useMemo(()=>{const m={federal:0,state:0,city:0,heroes:0};progs.forEach(p=>{if(m[p.layer]!==undefined)m[p.layer]++;});return m;},[progs]);
   const crime=locInfo?getCrime(locInfo.city):null;
   const climate=locInfo?getClimate(locInfo.state):null;
-  const riskColor=r=>r==="Extreme"||r==="Very High"?C.red:r==="High"?C.amber:r==="Moderate"||r==="Low-Moderate"?C.greenMid:C.green;
   const btnLabel=()=>{
     if(status==="found") return data.isFirstTime?"Let's find my first home →":"Let's find my next home →";
     if(status==="unknown") return "Continue anyway →";
@@ -1190,32 +1202,25 @@ function StepLoan({data,setData,onNext,onBack}){
   );
 }
 
-function StepPrograms({data,setData,onNext,onBack}){
+function StepPrograms({data,setData,onNext,onBack,programs:allP=[],progsLoading}){
   const d=data;
   const loc=d.locationInfo||{};
-  const{programs:allP,loading:progsLoading}=usePrograms(loc,d);
-  const incompat=new Set();
   const estimatedAssets=((d.k401||0)+(d.roth||0)+(d.hsa||0));
   const harveyAssetCap=75000;
   const overHarveyAssetCap=estimatedAssets>harveyAssetCap;
-  d.programs.forEach(id=>{const p=allP.find(x=>x.id===id);if(p)p.incompat.forEach(i=>incompat.add(i));});
-  const toggle=id=>{
-    const prog=allP.find(p=>p.id===id);if(!prog)return;
+  const progMap=useMemo(()=>new Map(allP.map(p=>[p.id,p])),[allP]);
+  const incompat=useMemo(()=>{const s=new Set();d.programs.forEach(id=>{const p=progMap.get(id);if(p)p.incompat.forEach(i=>s.add(i));});return s;},[d.programs,progMap]);
+  const toggle=useCallback(id=>{
+    const prog=progMap.get(id);if(!prog)return;
     if(d.programs.includes(id)){setData({...d,programs:d.programs.filter(p=>p!==id)});return;}
     const cleared=d.programs.filter(p=>!prog.incompat.includes(p));
     setData({...d,programs:[...cleared,id]});
-  };
-  const totalAssist=allP.filter(p=>d.programs.includes(p.id)).reduce((s,p)=>s+p.calc(d.price),0);
+  },[d,setData,progMap]);
+  const totalAssist=useMemo(()=>d.programs.reduce((s,id)=>{const p=progMap.get(id);return p?s+p.calc(d.price):s;},0),[d.programs,d.price,progMap]);
   const dp=d.price*d.dpPct/100;
   const fhaUp=d.loanType==="fha"?(d.price-dp)*0.0175:0;
   const needed=dp+d.price*0.03+1000+fhaUp;
   const oop=Math.max(0,needed-totalAssist);
-  const layers=[
-    {id:"federal",label:"Federal",col:C.blue,bg:C.blueLight},
-    {id:"state",label:"State",col:C.green,bg:C.greenLight},
-    {id:"city",label:"City / County",col:"#065F46",bg:"#D1FAE5"},
-    {id:"heroes",label:"Heroes, Professions & Nonprofits",col:"#4C1D95",bg:"#EDE9FE"},
-  ];
   return(
     <div>
       {loc.city&&<div style={{background:C.greenLight,borderRadius:10,padding:"10px 14px",marginBottom:12,fontSize:12,color:C.green,fontWeight:600}}>📍 Showing programs for {loc.city}, {loc.state} (ZIP {loc.zip})</div>}
@@ -1223,7 +1228,7 @@ function StepPrograms({data,setData,onNext,onBack}){
         Programs are grouped by funding layer. Select any you may qualify for — incompatible programs grey out automatically. Stacked programs cover your down payment and closing costs first, then reduce your loan balance.
       </p>
       {progsLoading&&<ProgramsSkeleton/>}
-      {!progsLoading&&layers.map(layer=>{
+      {!progsLoading&&PROGRAM_LAYERS.map(layer=>{
         const lp=allP.filter(p=>p.layer===layer.id);
         if(!lp.length)return null;
         return(
@@ -1255,7 +1260,6 @@ function StepPrograms({data,setData,onNext,onBack}){
           </div>
         );
       })}
-      {progsLoading&&null}
       <Card>
         <SecTitle>Your stacked total</SecTitle>
         <InfoRow label="Total assistance" value={totalAssist>0?fmt(totalAssist):"$0 — select programs above"} valueColor={totalAssist>0?C.green:C.gray500}/>
@@ -1330,20 +1334,15 @@ function StepChecklist({data,setData,onNext,onBack}){
   const [tl,setTl]=useState("6mo");
   const [checked,setChecked]=useState({});
   const loc=data.locationInfo||{};
-  const cl=generateChecklist(data,loc);
+  const cl=useMemo(()=>generateChecklist(data,loc),[data,loc]);
   const cur=cl[tl];
-  const toggle=id=>setChecked(p=>({...p,[id]:!p[id]}));
+  const toggle=useCallback(id=>setChecked(p=>({...p,[id]:!p[id]})),[]);
   const done=cur.tasks.filter(t=>checked[t.id]).length;
-  const timelines=[
-    {id:"3mo",label:"3 months",emoji:"🚀",desc:"Final sprint"},
-    {id:"6mo",label:"6 months",emoji:"🏗️",desc:"Build foundation"},
-    {id:"12mo",label:"12 months",emoji:"🌱",desc:"Plant seeds"},
-  ];
   return(
     <div>
       <p style={{fontSize:13,color:C.gray700,marginBottom:14,lineHeight:1.6}}>Your personalized action plan — tailored to your programs, credit score, debt load, and savings goals. Toggle between timelines below.</p>
       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:14}}>
-        {timelines.map(t=>(
+        {CHECKLIST_TIMELINES.map(t=>(
           <div key={t.id} onClick={()=>setTl(t.id)}
             style={{border:`2px solid ${tl===t.id?cl[t.id].color:C.gray300}`,borderRadius:12,padding:"10px 8px",cursor:"pointer",background:tl===t.id?cl[t.id].bg:C.white,textAlign:"center"}}>
             <div style={{fontSize:20,marginBottom:2}}>{t.emoji}</div>
@@ -1395,7 +1394,7 @@ function StepChecklist({data,setData,onNext,onBack}){
   );
 }
 
-function StepResults({data,onBack,onNext,onRestart}){
+function StepResults({data,onBack,onNext,onRestart,programs:allP=[]}){
   const [tab,setTab]=useState("summary");
   const [shareMsg,setShareMsg]=useState("");
   const [waitYr,setWaitYr]=useState(1);
@@ -1409,8 +1408,8 @@ function StepResults({data,onBack,onNext,onRestart}){
   const trueTakeHome=grossMo-taxFICA-pretaxMo-rothmo;
   const ar=d.loanType==="fha"?6.48:d.loanType==="va"?6.17:convRate(d.score,d.dpPct);
   const dp=d.price*d.dpPct/100;
-  const{programs:allP}=usePrograms(loc,d);
-  const totalAssist=allP.filter(p=>d.programs.includes(p.id)).reduce((s,p)=>s+p.calc(d.price),0);
+  const progMap=useMemo(()=>new Map(allP.map(p=>[p.id,p])),[allP]);
+  const totalAssist=useMemo(()=>d.programs.reduce((s,id)=>{const p=progMap.get(id);return p?s+p.calc(d.price):s;},0),[d.programs,d.price,progMap]);
   const fhaUp=d.loanType==="fha"?(d.price-dp)*0.0175:0;
   const cashNeeded=dp+d.price*0.03+1000+fhaUp;
   const assistPrin=Math.max(0,totalAssist-cashNeeded);
@@ -2279,12 +2278,11 @@ function StepResults({data,onBack,onNext,onRestart}){
   );
 }
 
-function StepUnderwriting({data,onNext,onBack}){
+function StepUnderwriting({data,onNext,onBack,programs:allP=[]}){
   const d=data;
-  const loc=d.locationInfo||{};
   const grossMo=Math.round((d.income+(d.alimony||0))/12);
-  const{programs:allP}=usePrograms(loc,d);
-  const totalAssist=allP.filter(p=>d.programs.includes(p.id)).reduce((s,p)=>s+p.calc(d.price),0);
+  const progMap=useMemo(()=>new Map(allP.map(p=>[p.id,p])),[allP]);
+  const totalAssist=useMemo(()=>d.programs.reduce((s,id)=>{const p=progMap.get(id);return p?s+p.calc(d.price):s;},0),[d.programs,d.price,progMap]);
   const dp=d.price*d.dpPct/100;
   const fhaUp=d.loanType==="fha"?(d.price-dp)*0.0175:0;
   const cashNeeded=dp+d.price*0.03+1000+fhaUp;
@@ -2399,6 +2397,7 @@ export default function App(){
   const [data,setData]=useState(DEFAULT);
   const [hoveredStep,setHoveredStep]=useState(null);
   const goTo=s=>{setStep(s);if(s>maxStep)setMaxStep(s);window.scrollTo(0,0);};
+  const{programs,loading:progsLoading}=usePrograms(data.locationInfo||{},data);
   return(
     <div style={{background:C.cream,minHeight:"100vh",fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",color:C.charcoal}}>
       <div style={{background:C.white,borderBottom:`1px solid ${C.gray100}`,padding:"12px 16px",position:"sticky",top:0,zIndex:100}}>
@@ -2451,14 +2450,14 @@ export default function App(){
         <div style={{marginBottom:14}}>
           <div style={{fontSize:22,fontWeight:900,color:C.charcoal,letterSpacing:"-0.02em"}}>{STEPS[step-1].icon} {STEPS[step-1].title}</div>
         </div>
-        {step===1&&<StepLocation data={data} setData={setData} onNext={()=>goTo(2)}/>}
+        {step===1&&<StepLocation data={data} setData={setData} onNext={()=>goTo(2)} programs={programs}/>}
         {step===2&&<StepIncome data={data} setData={setData} onNext={()=>goTo(3)} onBack={()=>goTo(1)}/>}
         {step===3&&<StepHome data={data} setData={setData} onNext={()=>goTo(4)} onBack={()=>goTo(2)}/>}
         {step===4&&<StepLoan data={data} setData={setData} onNext={()=>goTo(5)} onBack={()=>goTo(3)}/>}
-        {step===5&&<StepPrograms data={data} setData={setData} onNext={()=>goTo(6)} onBack={()=>goTo(4)}/>}
+        {step===5&&<StepPrograms data={data} setData={setData} onNext={()=>goTo(6)} onBack={()=>goTo(4)} programs={programs} progsLoading={progsLoading}/>}
         {step===6&&<StepBudget data={data} setData={setData} onNext={()=>goTo(7)} onBack={()=>goTo(5)}/>}
-        {step===7&&<StepUnderwriting data={data} onNext={()=>goTo(8)} onBack={()=>goTo(6)}/>}
-        {step===8&&<StepResults data={data} onBack={()=>goTo(7)} onNext={()=>goTo(9)} onRestart={()=>{setData(DEFAULT);goTo(1);}}/>}
+        {step===7&&<StepUnderwriting data={data} onNext={()=>goTo(8)} onBack={()=>goTo(6)} programs={programs}/>}
+        {step===8&&<StepResults data={data} onBack={()=>goTo(7)} onNext={()=>goTo(9)} onRestart={()=>{setData(DEFAULT);goTo(1);}} programs={programs}/>}
         {step===9&&<StepChecklist data={data} setData={setData} onNext={()=>goTo(9)} onBack={()=>goTo(8)}/>}
       </div>
     </div>
