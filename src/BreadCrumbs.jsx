@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect } from "react";
 import jsPDF from "jspdf";
 
 const C = {
@@ -369,77 +369,6 @@ const NEIGHBORHOODS_DB={
 };
 const getNeighborhoods=city=>NEIGHBORHOODS_DB[city]||null;
 
-// Reconstruct calc function from the serialized calcSpec returned by /api/programs
-function calcFromSpec(spec,price){
-  if(!spec)return 0;
-  if(spec.t==="pct")return Math.round(price*spec.r);
-  if(spec.t==="fixed")return spec.v;
-  return 0;
-}
-
-// Async hook: fetch programs from serverless API, fall back to local on error
-function usePrograms(loc,data){
-  const[programs,setPrograms]=useState(null);
-  const[loading,setLoading]=useState(false);
-  useEffect(()=>{
-    if(!loc?.state){setPrograms([]);return;}
-    const ctrl=new AbortController();
-    setLoading(true);
-    const params=new URLSearchParams({
-      state:loc.state||"",city:loc.city||"",county:loc.county||"",
-      profession:data.profession||"none",isVet:String(!!data.isVet),
-      income:String(data.income||0),householdSize:String(data.householdSize||1),
-    });
-    fetch(`/api/programs?${params}`,{signal:ctrl.signal})
-      .then(r=>{if(!r.ok)throw new Error();return r.json();})
-      .then(json=>{
-        const rebuilt=json.programs.map(p=>({
-          ...p,calc:price=>calcFromSpec(p.calcSpec,price),
-        }));
-        setPrograms(rebuilt);
-      })
-      .catch(err=>{
-        if(err.name==="AbortError")return;
-        setPrograms(getProgramsForLocation(
-          loc.state,loc.city,loc.county,
-          data.profession,data.isVet,data.income,data.householdSize||1
-        ));
-      })
-      .finally(()=>{if(!ctrl.signal.aborted)setLoading(false);});
-    return()=>ctrl.abort();
-  },[loc?.state,loc?.city,loc?.county,data.profession,data.isVet,data.income,data.householdSize]);
-  return{programs:programs||[],loading};
-}
-
-const PROGRAM_LAYERS=[
-  {id:"federal",label:"Federal",col:C.blue,bg:C.blueLight},
-  {id:"state",label:"State",col:C.green,bg:C.greenLight},
-  {id:"city",label:"City / County",col:"#065F46",bg:"#D1FAE5"},
-  {id:"heroes",label:"Heroes, Professions & Nonprofits",col:"#4C1D95",bg:"#EDE9FE"},
-];
-const CHECKLIST_TIMELINES=[
-  {id:"3mo",label:"3 months",emoji:"🚀",desc:"Final sprint"},
-  {id:"6mo",label:"6 months",emoji:"🏗️",desc:"Build foundation"},
-  {id:"12mo",label:"12 months",emoji:"🌱",desc:"Plant seeds"},
-];
-const riskColor=r=>r==="Extreme"||r==="Very High"?C.red:r==="High"?C.amber:r==="Moderate"||r==="Low-Moderate"?C.greenMid:C.green;
-
-// Loading skeleton for programs list
-function ProgramsSkeleton(){
-  return(
-    <div>
-      {[...Array(5)].map((_,i)=>(
-        <div key={i} style={{borderRadius:12,padding:"14px 12px",marginBottom:10,background:"#F3F4F6",animation:"pulse 1.5s ease-in-out infinite"}}>
-          <div style={{height:10,width:"60%",borderRadius:6,background:"#E5E7EB",marginBottom:8}}/>
-          <div style={{height:8,width:"80%",borderRadius:6,background:"#E5E7EB",marginBottom:6}}/>
-          <div style={{height:8,width:"40%",borderRadius:6,background:"#E5E7EB"}}/>
-        </div>
-      ))}
-      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}`}</style>
-    </div>
-  );
-}
-
 function getProgramsForLocation(state,city,county,profession="none",isVet=false,income=0,householdSize=1){
   const st=(state||"").toUpperCase();
   const ci=(city||"").toLowerCase();
@@ -460,24 +389,9 @@ function getProgramsForLocation(state,city,county,profession="none",isVet=false,
     progs.push({id:"tsahc",name:"TSAHC Home Sweet Texas",short:"Up to 5% DPA grant, no repayment",amount:"Up to 5%",badge:"State",layer:"state",calc:p=>Math.round(p*.05),incompat:["tdhca"],note:"Income limit varies by county. tsahc.org",url:"https://www.tsahc.org"});
     progs.push({id:"tdhca",name:"My First Texas Home (TDHCA)",short:"5% DPA + below-market rate",amount:"5% of loan",badge:"State",layer:"state",calc:p=>Math.round(p*.05),incompat:["tsahc"],note:"30-yr fixed below-market rate. tdhca.state.tx.us",url:"https://www.tdhca.texas.gov"});
     progs.push({id:"mcc_tx",name:"Texas MCC",short:"15% of interest back as tax credit/yr",amount:"~$1,400+/yr",badge:"Federal",layer:"federal",calc:()=>0,incompat:[],note:"Reinstated March 2026. First-time buyers only.",url:"https://www.tsahc.org",expires:"Reinstated Mar 2026 — verify active"});
-    // SETH 5 Star — Harris + surrounding 8-county area, repeat buyers OK
-    if(co.includes("harris")||co.includes("fort bend")||co.includes("montgomery")||co.includes("brazoria")||co.includes("galveston")||co.includes("liberty")||co.includes("chambers")||co.includes("waller")){
-      progs.push({id:"seth5star",name:"SETH 5 Star Program",short:"Up to 5% DPA, repeat buyers OK, 620+ FICO",amount:"Up to 5%",badge:"Regional",layer:"city",calc:p=>Math.round(p*.05),incompat:[],note:"Southeast Texas Housing Finance Corp. 8-county Houston metro. $122,100 income limit (all household earners). 620+ FICO. Repeat buyers allowed. seth.org",url:"https://www.seth.org/homebuyers/5-star-texas-advantage-program"});
-    }
-    // TDHCA My Choice Texas Home — statewide, repeat buyers OK
-    progs.push({id:"mychoicetx",name:"TDHCA My Choice Texas Home",short:"5% DPA, statewide, repeat buyers OK",amount:"5% of loan",badge:"State",layer:"state",calc:p=>Math.round(p*.05),incompat:[],note:"Statewide TDHCA program. Unlike My First Texas Home, repeat buyers are eligible. $122,100 income limit. 620+ FICO. 30-yr fixed below-market rate. tdhca.texas.gov",url:"https://www.tdhca.texas.gov/homeownership/mychoice/"});
-    // Chenoa Fund — national, no AMI cap, repeat buyers OK
-    progs.push({id:"chenoa",name:"Chenoa Fund",short:"3.5–5% DPA nationally, no AMI cap",amount:"3.5–5%",badge:"National",layer:"federal",calc:p=>Math.round(p*.035),incompat:[],note:"National program via CBC Mortgage Agency. No income limit. 600+ FICO (620+ for best terms). Repeat buyers OK. FHA-backed DPA — forgivable or repayable options. chenoafund.org",url:"https://chenoafund.org"});
     if(ci.includes("houston")||co.includes("harris")){
-      progs.push({id:"hap",name:"City of Houston HAP",short:"Up to $30K forgivable, city limits",amount:"Up to $30K",badge:"City",layer:"city",calc:()=>30000,incompat:["harvey","hap2"],note:"Inside Houston city limits. 80% AMI limit. Forgiven after 5 years.",url:"https://houstontx.gov/housing/hap.html",amiLimit:houstonAMI*0.80,expires:"Annual cycle — verify availability"});
-      progs.push({id:"harvey",name:"Harvey HbAP 2.0",short:"Up to $125K if Houston resident 8/25/17",amount:"Up to $125K",badge:"City",layer:"city",calc:()=>125000,incompat:["hap","hap2"],note:"Call 832-393-0550 first. 120% AMI limit. Avoid June 18–July 11.",url:"https://houstontx.gov/housing/",amiLimit:houstonAMI*1.20,expires:"Rolling — call to confirm funds"});
-      // City of Houston HAP 2.0 Expanded — Houston taxpayers, 120% AMI, first-time only
-      progs.push({id:"hap2",name:"City of Houston HAP 2.0 Expanded",short:"Up to $30K, 120% AMI, Houston taxpayers",amount:"Up to $30K",badge:"City",layer:"city",calc:()=>30000,incompat:["hap","harvey"],note:"Houston property taxpayers. First-time buyers only. 120% AMI limit (higher than original HAP). Front-end DTI max 33%, back-end DTI max 45%. houstontx.gov/housing",url:"https://houstontx.gov/housing/hap.html",amiLimit:houstonAMI*1.20,expires:"Annual cycle — verify availability"});
-      // Harris County CDBG DPA — unincorporated Harris only, first-time, 80% AMI, $30K asset cap
-      const harrisCDBGLimit=income>0&&income<=houstonAMI*0.80;
-      progs.push({id:"harris_cdbg",name:"Harris County CDBG DPA",short:"Up to $23,800, unincorporated Harris only",amount:"Up to $23,800",badge:"County",layer:"city",calc:()=>23800,incompat:[],note:"Unincorporated Harris County ONLY (not inside Houston city limits). First-time buyers. 80% AMI income limit ($"+Math.round(houstonAMI*0.80).toLocaleString()+" for "+hs+"-person household). $30,000 asset cap — if assets exceed $30K you may be disqualified. 580+ FICO. hcdd.hctx.net",url:"https://www.hcdd.hctx.net/homeownership",amiLimit:houstonAMI*0.80,assetCap:30000});
-      // Harris County SFARFI — first-time, 80% AMI, FE 39%, DTI 42%
-      progs.push({id:"harris_sfarfi",name:"Harris County SFARFI",short:"Down payment + closing cost help, 620+ FICO",amount:"Varies",badge:"County",layer:"city",calc:()=>10000,incompat:[],note:"Harris County Single Family Affordable Rehab Finance Initiative. First-time buyers. 80% AMI limit. 620+ FICO. Front-end DTI max 39%, back-end DTI max 42%. hcdd.hctx.net",url:"https://www.hcdd.hctx.net/homeownership",amiLimit:houstonAMI*0.80});
+      progs.push({id:"hap",name:"City of Houston HAP",short:"Up to $30K forgivable, city limits",amount:"Up to $30K",badge:"City",layer:"city",calc:()=>30000,incompat:["harvey"],note:"Inside Houston city limits. 80% AMI limit. Forgiven after 5 years.",url:"https://houstontx.gov/housing/hap.html",amiLimit:houstonAMI*0.80,expires:"Annual cycle — verify availability"});
+      progs.push({id:"harvey",name:"Harvey HbAP 2.0",short:"Up to $125K if Houston resident 8/25/17",amount:"Up to $125K",badge:"City",layer:"city",calc:()=>125000,incompat:["hap"],note:"Call 832-393-0550 first. 120% AMI limit. Avoid June 18–July 11.",url:"https://houstontx.gov/housing/",amiLimit:houstonAMI*1.20,expires:"Rolling — call to confirm funds"});
     }
     if(ci.includes("dallas")||co.includes("dallas")){
       progs.push({id:"dhap",name:"Dallas Homebuyer Assistance",short:"Up to $60K forgivable",amount:"Up to $60K",badge:"City",layer:"city",calc:()=>60000,incompat:[],note:"Dallas city limits. 80% AMI limit.",url:"https://dallascityhall.com/departments/housing"});
@@ -775,6 +689,7 @@ const AcronymBar=({keys})=>{
 
 // Reusable climate card — shows zip-specific tool links first, state-level context below
 const ClimateCard=({climate,state,zip,compact=false})=>{
+  const riskColor=r=>r==="Extreme"||r==="Very High"?C.red:r==="High"?C.amber:r==="Moderate"||r==="Low-Moderate"?C.greenMid:C.green;
   const riskBg=r=>r==="Extreme"||r==="Very High"?C.redLight:r==="High"?C.amberLight:r==="Moderate"||r==="Low-Moderate"?"#FFF7ED":C.greenLight;
   // .gov primary sources listed first, trusted secondary below
   const zipTools=[
@@ -874,7 +789,7 @@ const CrimeCard=({crime,city,zip,compact=false})=>{
   );
 };
 
-function StepLocation({data,setData,onNext,programs:progs=[]}){
+function StepLocation({data,setData,onNext}){
   const [zip,setZip]=useState(data.zip||"");
   const [status,setStatus]=useState(data.zip?"found":"idle");
   const [locInfo,setLocInfo]=useState(data.locationInfo||null);
@@ -899,9 +814,12 @@ function StepLocation({data,setData,onNext,programs:progs=[]}){
     setLoading(false);
   };
   const confirm=()=>{setData({...data,zip,locationInfo:locInfo});onNext();};
-  const layers=useMemo(()=>{const m={federal:0,state:0,city:0,heroes:0};progs.forEach(p=>{if(m[p.layer]!==undefined)m[p.layer]++;});return m;},[progs]);
+  const progs=locInfo?getProgramsForLocation(locInfo.state,locInfo.city,locInfo.county,data.profession,data.isVet,data.income,data.householdSize||1):[];
+  const layers={federal:0,state:0,city:0,heroes:0};
+  progs.forEach(p=>{if(layers[p.layer]!==undefined)layers[p.layer]++;});
   const crime=locInfo?getCrime(locInfo.city):null;
   const climate=locInfo?getClimate(locInfo.state):null;
+  const riskColor=r=>r==="Extreme"||r==="Very High"?C.red:r==="High"?C.amber:r==="Moderate"||r==="Low-Moderate"?C.greenMid:C.green;
   const btnLabel=()=>{
     if(status==="found") return data.isFirstTime?"Let's find my first home →":"Let's find my next home →";
     if(status==="unknown") return "Continue anyway →";
@@ -1120,8 +1038,8 @@ function StepLoan({data,setData,onNext,onBack}){
   const terms=[
     {id:360,label:"30-yr fixed",note:"Lowest monthly payment"},
     {id:180,label:"15-yr fixed",note:"Less interest, higher payment"},
-    {id:"5arm",label:"5/1 ARM (Adjustable-Rate Mortgage)",note:"Fixed interest rate for the first 5 years, then adjusts once every year after."},
-    {id:"7arm",label:"7/1 ARM (Adjustable-Rate Mortgage)",note:"Fixed interest rate for the first 7 years, then adjusts once every year after."},
+    {id:"5arm",label:"5/1 ARM",note:"Fixed 5 yrs, then adjusts"},
+    {id:"7arm",label:"7/1 ARM",note:"Fixed 7 yrs, then adjusts"},
   ];
   return(
     <div>
@@ -1202,33 +1120,39 @@ function StepLoan({data,setData,onNext,onBack}){
   );
 }
 
-function StepPrograms({data,setData,onNext,onBack,programs:allP=[],progsLoading}){
+function StepPrograms({data,setData,onNext,onBack}){
   const d=data;
   const loc=d.locationInfo||{};
+  const allP=getProgramsForLocation(loc.state,loc.city,loc.county,d.profession,d.isVet,d.income,d.householdSize||1);
+  const incompat=new Set();
   const estimatedAssets=((d.k401||0)+(d.roth||0)+(d.hsa||0));
   const harveyAssetCap=75000;
   const overHarveyAssetCap=estimatedAssets>harveyAssetCap;
-  const progMap=useMemo(()=>new Map(allP.map(p=>[p.id,p])),[allP]);
-  const incompat=useMemo(()=>{const s=new Set();d.programs.forEach(id=>{const p=progMap.get(id);if(p)p.incompat.forEach(i=>s.add(i));});return s;},[d.programs,progMap]);
-  const toggle=useCallback(id=>{
-    const prog=progMap.get(id);if(!prog)return;
+  d.programs.forEach(id=>{const p=allP.find(x=>x.id===id);if(p)p.incompat.forEach(i=>incompat.add(i));});
+  const toggle=id=>{
+    const prog=allP.find(p=>p.id===id);if(!prog)return;
     if(d.programs.includes(id)){setData({...d,programs:d.programs.filter(p=>p!==id)});return;}
     const cleared=d.programs.filter(p=>!prog.incompat.includes(p));
     setData({...d,programs:[...cleared,id]});
-  },[d,setData,progMap]);
-  const totalAssist=useMemo(()=>d.programs.reduce((s,id)=>{const p=progMap.get(id);return p?s+p.calc(d.price):s;},0),[d.programs,d.price,progMap]);
+  };
+  const totalAssist=allP.filter(p=>d.programs.includes(p.id)).reduce((s,p)=>s+p.calc(d.price),0);
   const dp=d.price*d.dpPct/100;
   const fhaUp=d.loanType==="fha"?(d.price-dp)*0.0175:0;
   const needed=dp+d.price*0.03+1000+fhaUp;
   const oop=Math.max(0,needed-totalAssist);
+  const layers=[
+    {id:"federal",label:"Federal",col:C.blue,bg:C.blueLight},
+    {id:"state",label:"State",col:C.green,bg:C.greenLight},
+    {id:"city",label:"City / County",col:"#065F46",bg:"#D1FAE5"},
+    {id:"heroes",label:"Heroes, Professions & Nonprofits",col:"#4C1D95",bg:"#EDE9FE"},
+  ];
   return(
     <div>
       {loc.city&&<div style={{background:C.greenLight,borderRadius:10,padding:"10px 14px",marginBottom:12,fontSize:12,color:C.green,fontWeight:600}}>📍 Showing programs for {loc.city}, {loc.state} (ZIP {loc.zip})</div>}
       <p style={{fontSize:13,color:C.gray700,marginBottom:12,lineHeight:1.6}}>
         Programs are grouped by funding layer. Select any you may qualify for — incompatible programs grey out automatically. Stacked programs cover your down payment and closing costs first, then reduce your loan balance.
       </p>
-      {progsLoading&&<ProgramsSkeleton/>}
-      {!progsLoading&&PROGRAM_LAYERS.map(layer=>{
+      {layers.map(layer=>{
         const lp=allP.filter(p=>p.layer===layer.id);
         if(!lp.length)return null;
         return(
@@ -1334,15 +1258,20 @@ function StepChecklist({data,setData,onNext,onBack}){
   const [tl,setTl]=useState("6mo");
   const [checked,setChecked]=useState({});
   const loc=data.locationInfo||{};
-  const cl=useMemo(()=>generateChecklist(data,loc),[data,loc]);
+  const cl=generateChecklist(data,loc);
   const cur=cl[tl];
-  const toggle=useCallback(id=>setChecked(p=>({...p,[id]:!p[id]})),[]);
+  const toggle=id=>setChecked(p=>({...p,[id]:!p[id]}));
   const done=cur.tasks.filter(t=>checked[t.id]).length;
+  const timelines=[
+    {id:"3mo",label:"3 months",emoji:"🚀",desc:"Final sprint"},
+    {id:"6mo",label:"6 months",emoji:"🏗️",desc:"Build foundation"},
+    {id:"12mo",label:"12 months",emoji:"🌱",desc:"Plant seeds"},
+  ];
   return(
     <div>
       <p style={{fontSize:13,color:C.gray700,marginBottom:14,lineHeight:1.6}}>Your personalized action plan — tailored to your programs, credit score, debt load, and savings goals. Toggle between timelines below.</p>
       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:14}}>
-        {CHECKLIST_TIMELINES.map(t=>(
+        {timelines.map(t=>(
           <div key={t.id} onClick={()=>setTl(t.id)}
             style={{border:`2px solid ${tl===t.id?cl[t.id].color:C.gray300}`,borderRadius:12,padding:"10px 8px",cursor:"pointer",background:tl===t.id?cl[t.id].bg:C.white,textAlign:"center"}}>
             <div style={{fontSize:20,marginBottom:2}}>{t.emoji}</div>
@@ -1394,7 +1323,7 @@ function StepChecklist({data,setData,onNext,onBack}){
   );
 }
 
-function StepResults({data,onBack,onNext,onRestart,programs:allP=[]}){
+function StepResults({data,onBack,onNext,onRestart}){
   const [tab,setTab]=useState("summary");
   const [shareMsg,setShareMsg]=useState("");
   const [waitYr,setWaitYr]=useState(1);
@@ -1408,8 +1337,8 @@ function StepResults({data,onBack,onNext,onRestart,programs:allP=[]}){
   const trueTakeHome=grossMo-taxFICA-pretaxMo-rothmo;
   const ar=d.loanType==="fha"?6.48:d.loanType==="va"?6.17:convRate(d.score,d.dpPct);
   const dp=d.price*d.dpPct/100;
-  const progMap=useMemo(()=>new Map(allP.map(p=>[p.id,p])),[allP]);
-  const totalAssist=useMemo(()=>d.programs.reduce((s,id)=>{const p=progMap.get(id);return p?s+p.calc(d.price):s;},0),[d.programs,d.price,progMap]);
+  const allP=getProgramsForLocation(loc.state,loc.city,loc.county,d.profession,d.isVet,d.income,d.householdSize||1);
+  const totalAssist=allP.filter(p=>d.programs.includes(p.id)).reduce((s,p)=>s+p.calc(d.price),0);
   const fhaUp=d.loanType==="fha"?(d.price-dp)*0.0175:0;
   const cashNeeded=dp+d.price*0.03+1000+fhaUp;
   const assistPrin=Math.max(0,totalAssist-cashNeeded);
@@ -1438,511 +1367,159 @@ function StepResults({data,onBack,onNext,onRestart,programs:allP=[]}){
     navigator.clipboard?.writeText(url).then(()=>setShareMsg("✓ Copied!")).catch(()=>setShareMsg("Copy failed"));
     setTimeout(()=>setShareMsg(""),3000);
   };
-  const download=async()=>{
-    // Load logo for PDF
-    let logoB64=null;
-    try{
-      const res=await fetch("/logo.png");
-      const buf=await res.arrayBuffer();
-      const bytes=new Uint8Array(buf);
-      let bin="";for(let i=0;i<bytes.length;i++)bin+=String.fromCharCode(bytes[i]);
-      logoB64="data:image/png;base64,"+btoa(bin);
-    }catch(e){logoB64=null;}
-
+  const download=()=>{
     const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
-    const W=210,M=16,CW=W-M*2;
-    let y=0;
-
-    // ── Color palette ────────────────────────────────────────────────────────
-    const GRN=[27,107,68],GRNL=[232,245,238],GRNM=[74,155,111];
-    const AMB=[232,160,32],AMBL=[254,243,220];
-    const RED=[220,38,38],REDL=[254,226,226];
-    const CHR=[44,44,44],G7=[75,85,99],G5=[107,114,128],G3=[209,213,219],G1=[243,244,246];
-    const WHT=[255,255,255];
-
-    // ── Helpers ──────────────────────────────────────────────────────────────
-    const nl=(n=5)=>{y+=n;};
-    const newPage=()=>{doc.addPage();y=M;};
-    const safe=(n=6)=>{if(y>260){newPage();}};
-    const stripEmoji=s=>String(s||"").replace(/[\uD800-\uDFFF]|️/g,"").trim();
-
-    const fillRect=(x,ry,w,h,rgb)=>{doc.setFillColor(...rgb);doc.rect(x,ry,w,h,"F");};
-    const strokeRect=(x,ry,w,h,rgb,lw=0.3)=>{doc.setDrawColor(...rgb);doc.setLineWidth(lw);doc.rect(x,ry,w,h,"S");};
-    const hline=(ry,col=G3,lw=0.25)=>{doc.setDrawColor(...col);doc.setLineWidth(lw);doc.line(M,ry,W-M,ry);};
-
-    const txt=(t,x,ry,size,rgb,style="normal",align="left")=>{
-      doc.setFont("helvetica",style);doc.setFontSize(size);doc.setTextColor(...rgb);
-      doc.text(String(t),x,ry,{align});
+    const W=210,M=15,CW=W-M*2;
+    let y=M;
+    const nl=(n=6)=>{y+=n;};
+    const line=(x1,y1,x2,y2,col="#e5e7eb")=>{doc.setDrawColor(col);doc.setLineWidth(0.3);doc.line(x1,y1,x2,y2);};
+    const h1=(t)=>{doc.setFont("helvetica","bold");doc.setFontSize(16);doc.setTextColor(27,107,68);doc.text(t,M,y);nl(7);};
+    const h2=(t)=>{line(M,y,W-M,y);nl(4);doc.setFont("helvetica","bold");doc.setFontSize(11);doc.setTextColor(44,44,44);doc.text(t,M,y);nl(5);};
+    const row=(label,val,valCol)=>{
+      doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(107,114,128);doc.text(label,M,y);
+      doc.setFont("helvetica","bold");doc.setTextColor(...(valCol||[44,44,44]));doc.text(val,W-M,y,{align:"right"});
+      nl(5);
     };
-    const wrap=(t,x,ry,maxW,size,rgb,style="normal",lineH=4.2)=>{
-      doc.setFont("helvetica",style);doc.setFontSize(size);doc.setTextColor(...rgb);
-      const lines=doc.splitTextToSize(String(t),maxW);
-      doc.text(lines,x,ry);
-      return lines.length*lineH;
-    };
+    const body=(t,col)=>{doc.setFont("helvetica","normal");doc.setFontSize(9);doc.setTextColor(...(col||[75,85,99]));const lines=doc.splitTextToSize(t,CW);doc.text(lines,M,y);nl(lines.length*4+1);};
+    const check=()=>{if(y>270){doc.addPage();y=M;}};
 
-    // Labeled data row with divider
-    const row=(label,val,valRgb=CHR,indent=0)=>{
-      safe();
-      txt(label,M+indent,y,10,G5);
-      txt(val,W-M,y,10,valRgb,"bold","right");
-      nl(6.5);
-      hline(y);nl(1.5);
-    };
+    // Header
+    doc.setFillColor(27,107,68);doc.rect(0,0,W,22,"F");
+    doc.setFont("helvetica","bold");doc.setFontSize(20);doc.setTextColor(255,255,255);doc.text("🍞 Bread Crumbs",M,14);
+    doc.setFontSize(9);doc.setFont("helvetica","normal");doc.text("Home Buying Financial Summary",M,19);
+    doc.text(new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"}),W-M,19,{align:"right"});
+    y=30;
 
-    // Section header — green pill badge left, title right of it
-    const sectionHead=(title,emoji="")=>{
-      safe();
-      if(y>M+5)nl(8);
-      fillRect(M,y-4,CW,9,GRNL);
-      doc.setDrawColor(...GRN);doc.setLineWidth(1);
-      doc.line(M,y-4,M,y+5);
-      txt((emoji?emoji+" ":"")+title,M+5,y+1,11,GRN,"bold");
-      nl(10);
-    };
+    // Location bar
+    doc.setFillColor(232,245,238);doc.rect(M,y,CW,10,"F");
+    doc.setFont("helvetica","bold");doc.setFontSize(10);doc.setTextColor(27,107,68);
+    doc.text(`📍 ${loc.city||""}${loc.state?", "+loc.state:""} · ZIP ${loc.zip||"—"}  ·  ${d.isFirstTime?"First-time buyer":"Buying again"}`,M+3,y+6.5);
+    y+=14;
 
-    // Stat card — filled box with label + big value
-    const statCard=(label,value,rgb=GRN,bgRgb=GRNL,x2,ry2,w2,h2=14)=>{
-      fillRect(x2,ry2,w2,h2,bgRgb);
-      strokeRect(x2,ry2,w2,h2,rgb,0.2);
-      txt(label,x2+w2/2,ry2+4.5,9,G5,"normal","center");
-      txt(value,x2+w2/2,ry2+10.5,11,rgb,"bold","center");
-    };
-
-    // ── Figma-inspired 2-column checklist row ────────────────────────────────
-    // Col 1 (8mm fixed): circle checkbox, vertically centered to first text line
-    // Col 2 (flex):      task text (medium weight) + category subtext (light, muted)
-    const taskRow=(task,accent)=>{
-      const CB_X=M+4;          // checkbox circle center-x
-      const CB_W=9;            // column 1 width (mm)
-      const TEXT_X=M+CB_W;    // column 2 start-x
-      const TEXT_W=CW-CB_W-1; // column 2 width
-      const PAD_V=4;            // vertical padding top/bottom inside row
-      const LINE_H=5;          // main text line height (mm) — 10pt font
-      const SUB_H=4.2;         // subtext line height — 8.5pt font
-
-      // Pre-measure text to size the row correctly
-      doc.setFont("helvetica","bold");doc.setFontSize(10);
-      const mainLines=doc.splitTextToSize(String(task.text),TEXT_W);
-      const rawCat=stripEmoji(task.cat);
-      const subLines=rawCat?(doc.setFont("helvetica","normal"),doc.setFontSize(8.5),doc.splitTextToSize(rawCat,TEXT_W)):[];
-      const mainH=mainLines.length*LINE_H;
-      const subH=subLines.length>0?subLines.length*SUB_H+1.5:0;
-      const rowH=mainH+subH+PAD_V*2;
-
-      safe(rowH+4);
-
-      // Row: alternating subtle fill + single bottom rule
-      fillRect(M,y,CW,rowH,[250,251,252]);
-      doc.setDrawColor(220,224,228);doc.setLineWidth(0.18);
-      doc.line(M,y+rowH,M+CW,y+rowH);
-
-      // Checkbox circle — open ring only (never pre-filled; urgent = red border, regular = slate)
-      const cbCY=y+PAD_V+(LINE_H*0.65);
-      doc.setDrawColor(...(task.urgent?RED:[160,168,178]));
-      doc.setLineWidth(task.urgent?0.8:0.5);
-      doc.circle(CB_X,cbCY,2.8,"S");
-
-      // Main task text — 10pt bold, charcoal (urgent = red)
-      doc.setFont("helvetica","bold");doc.setFontSize(10);
-      doc.setTextColor(...(task.urgent?RED:CHR));
-      doc.text(mainLines,TEXT_X,y+PAD_V+LINE_H*0.85);
-
-      // Subtext (category) — 8.5pt regular, muted gray
-      if(subLines.length>0){
-        const subY=y+PAD_V+mainH+1.5+SUB_H*0.85;
-        doc.setFont("helvetica","normal");doc.setFontSize(8.5);
-        doc.setTextColor(...G5);
-        doc.text(subLines,TEXT_X,subY);
-      }
-
-      y+=rowH;
-    };
-
-    // ── Add footer to every page after building ──────────────────────────────
-    const addFooters=()=>{
-      const pages=doc.getNumberOfPages();
-      for(let i=1;i<=pages;i++){
-        doc.setPage(i);
-        fillRect(0,287,W,10,[248,250,252]);
-        hline(287,G3,0.3);
-        txt("Bread Crumbs  ·  Home Buying Financial Summary",M,292,7,G5);
-        txt(`Page ${i} of ${pages}`,W-M,292,7,G5,"normal","right");
-        txt(new Date().toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}),W/2,292,7,G5,"normal","center");
-      }
-    };
-
-    // ════════════════════════════════════════════════════════════════════════
-    // PAGE 1 — COVER
-    // ════════════════════════════════════════════════════════════════════════
-    // Dark green header band
-    fillRect(0,0,W,72,GRN);
-    // Decorative accent stripe
-    fillRect(0,68,W,4,GRNM);
-
-    // Logo
-    if(logoB64){
-      try{doc.addImage(logoB64,"PNG",M,6,18,18);}catch(e){}
-    }
-
-    // Brand name
-    txt("Bread Crumbs",M+22,14,22,WHT,"bold");
-    txt("Home Buying Financial Summary",M+22,20,9,[232,245,238],"normal");
-
-    // Date pill top-right
-    const dateStr=new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
-    txt(dateStr,W-M,12,8,[200,230,215],"normal","right");
-
-    // Location strip inside header
-    fillRect(M,28,CW,10,[255,255,255,0.12]);
-    fillRect(M,28,CW,10,[21,85,54]);
-    txt(`${loc.city||""}${loc.state?", "+loc.state:""}  |  ZIP ${loc.zip||"—"}  |  ${d.isFirstTime?"First-time buyer":"Buying again"}`,M+4,34,9,[200,230,215],"normal");
-
-    // 4 hero stat cards across the header bottom
-    const cards=[
-      {l:"Purchase Price",v:fmt(d.price),rgb:WHT,bg:[21,85,54]},
-      {l:"You Bring to Closing",v:oop===0?"$0":fmt(oop),rgb:oop<5000?[134,239,172]:oop<20000?AMB:RED,bg:[21,85,54]},
-      {l:"Monthly Housing",v:fmt(housing)+"/mo",rgb:WHT,bg:[21,85,54]},
-      {l:"Monthly Buffer",v:(remaining>=0?"+":"-")+fmt(Math.abs(remaining)),rgb:remaining>=500?[134,239,172]:remaining>=0?AMB:RED,bg:[21,85,54]},
-    ];
-    const cw=(CW-9)/4;
-    cards.forEach((c,i)=>{
-      const cx=M+i*(cw+3);
-      fillRect(cx,44,cw,22,c.bg);
-      strokeRect(cx,44,cw,22,[255,255,255,0.2],0.2);
-      txt(c.l,cx+cw/2,51,6.5,[180,220,200],"normal","center");
-      txt(c.v,cx+cw/2,59,9,c.rgb,"bold","center");
-    });
-
-    y=82;
-
-    // ── Quick snapshot grid ──────────────────────────────────────────────────
-    sectionHead("At a Glance","");
-
-    const snap2col=(items)=>{
-      const half=Math.ceil(items.length/2);
-      const col1=items.slice(0,half),col2=items.slice(half);
-      const maxRows=Math.max(col1.length,col2.length);
-      for(let i=0;i<maxRows;i++){
-        safe();
-        if(col1[i]){
-          txt(col1[i][0],M,y,10,G5);
-          txt(col1[i][1],M+CW/2-2,y,10,col1[i][2]||CHR,"bold","right");
-        }
-        if(col2[i]){
-          txt(col2[i][0],M+CW/2+2,y,10,G5);
-          txt(col2[i][1],W-M,y,10,col2[i][2]||CHR,"bold","right");
-        }
-        nl(5);
-        if(i<maxRows-1){hline(y,G1);nl(0.5);}
-      }
-      nl(2);
-    };
-
-    snap2col([
-      ["Gross income",fmtK(d.income)+"/yr"],
-      ["Take-home (after tax & 401k)",fmt(trueTakeHome)+"/mo"],
-      ["Credit score",String(d.score),d.score>=740?GRN:d.score>=680?AMB:RED],
-      ["Down payment",`${fmt(dp)} (${d.dpPct}%)`],
-      ["Loan type",d.loanType.toUpperCase()+" @ "+ar.toFixed(2)+"%"],
-      ["Effective loan",fmt(effLoan)],
-      ["Front-end DTI",fe+"%",fe<=28?GRN:RED],
-      ["Back-end DTI",be+"%",be<=43?GRN:RED],
-      ["Total assistance",totalAssist>0?fmt(totalAssist):"None",totalAssist>0?GRN:G5],
-      ["Programs selected",String(d.programs.length)+" program"+(d.programs.length!==1?"s":"")],
-    ]);
-
-    // Programs selected list
+    // ── SECTION 1: SUMMARY ───────────────────────────────────────────────────
+    h1("Summary");
+    row("Purchase price",fmt(d.price));
+    row("Down payment",`${fmt(dp)} (${d.dpPct}%)`);
+    row("Loan type & rate",`${d.loanType.toUpperCase()} · ${ar.toFixed(2)}%`);
+    row("Effective loan amount",fmt(effLoan));
+    row("Gross monthly income",fmt(grossMo));
+    row("True take-home (after tax & retirement)",fmt(trueTakeHome));
+    row("Total assistance stacked",fmt(totalAssist),[27,107,68]);
+    row("You bring to closing",fmt(oop),oop<2000?[27,107,68]:oop<10000?[146,64,14]:[220,38,38]);
+    row("Monthly housing cost (PITI + utils + HOA)",fmt(housing));
+    row("Monthly buffer",remaining>=0?fmt(remaining):"- "+fmt(Math.abs(remaining)),remaining>=300?[27,107,68]:remaining>=0?[146,64,14]:[220,38,38]);
+    row("Front-end DTI",fe+"%",fe<=28?[27,107,68]:[220,38,38]);
+    row("Back-end DTI",be+"%",be<=43?[27,107,68]:[220,38,38]);
     if(d.programs.length>0){
-      safe();
-      const pNames=d.programs.map(id=>allP.find(p=>p.id===id)?.name||id).join("  ·  ");
-      wrap(pNames,M,y,CW,8,GRNM,"normal",4);
-      nl(8);
+      body("Programs selected: "+d.programs.map(id=>allP.find(p=>p.id===id)?.name||id).join(", "));
     }
+    check();
 
-    // ════════════════════════════════════════════════════════════════════════
-    // CLOSING COSTS
-    // ════════════════════════════════════════════════════════════════════════
-    sectionHead("Closing Cost Breakdown","");
+    // ── SECTION 2: CLOSING COSTS ─────────────────────────────────────────────
+    h2("Closing Costs");
     row("Purchase price",fmt(d.price));
     row(`Down payment (${d.dpPct}%)`,`- ${fmt(dp)}`);
-    row("Base loan amount",fmt(d.price-dp));
-    if(fhaUp>0)row("FHA upfront MIP (1.75%)",fmt(fhaUp),RED);
+    row("Base loan",fmt(d.price-dp));
+    if(fhaUp>0)row("FHA upfront MIP (1.75%)",fmt(fhaUp),[220,38,38]);
     row("Lender fees & title (~2%)",fmt(d.price*.02));
     row("Prepaid taxes & insurance (~1%)",fmt(d.price*.01));
     row("Inspection + appraisal","$1,000");
-    safe();
-    fillRect(M,y,CW,7,G1);
-    txt("Total cash needed",M+2,y+4.5,10,CHR,"bold");
-    txt(fmt(cashNeeded),W-M-2,y+4.5,10,CHR,"bold","right");
-    nl(9);
-    if(totalAssist>0){
-      row("Assistance applied",`- ${fmt(Math.min(totalAssist,cashNeeded))}`,GRN);
-      if(assistPrin>0)row("Principal buydown",`- ${fmt(assistPrin)}`,GRN);
-    }
-    safe();
-    fillRect(M,y,CW,9,oop===0?GRNL:oop<10000?AMBL:REDL);
-    txt("You bring to closing",M+2,y+5.5,10.5,oop===0?GRN:oop<10000?AMB:RED,"bold");
-    txt(oop===0?"$0  (fully covered!)":fmt(oop),W-M-2,y+5.5,10.5,oop===0?GRN:oop<10000?AMB:RED,"bold","right");
-    nl(13);
+    row("Total cash needed",fmt(cashNeeded),[44,44,44]);
+    if(totalAssist>0){row("Assistance applied",`- ${fmt(Math.min(totalAssist,cashNeeded))}`,[27,107,68]);
+    if(assistPrin>0)row("Principal buydown",`- ${fmt(assistPrin)}`,[27,107,68]);}
+    row("You bring to closing",fmt(oop),oop<2000?[27,107,68]:oop<10000?[146,64,14]:[220,38,38]);
+    check();
 
-    // ════════════════════════════════════════════════════════════════════════
-    // MONTHLY BUDGET
-    // ════════════════════════════════════════════════════════════════════════
-    sectionHead("Monthly Budget","");
-
-    // Income waterfall
-    txt("INCOME",M,y,9,G5,"bold");nl(5.5);
-    row("Gross monthly income",fmt(grossMo),GRN);
-    if(d.k401>0)row("401(k) / 403(b) pre-tax",`- ${fmt(Math.round(d.k401/12))}`,RED);
-    if(d.hsa>0)row("HSA pre-tax",`- ${fmt(Math.round(d.hsa/12))}`,RED);
-    row("Federal income tax + FICA",`- ${fmt(taxFICA)}`,RED);
-    if(d.roth>0)row("Roth IRA (post-tax)",`- ${fmt(Math.round(d.roth/12))}`,RED);
-    safe();
-    fillRect(M,y,CW,7,GRNL);
-    txt("True spendable take-home",M+2,y+4.5,10,GRN,"bold");
-    txt(fmt(trueTakeHome)+"/mo",W-M-2,y+4.5,10,GRN,"bold","right");
-    nl(11);
-
-    txt("HOUSING",M,y,9,G5,"bold");nl(5.5);
-    row(`Principal & Interest (${ar.toFixed(2)}%)`,fmt(piMo)+"/mo");
-    row("Property tax (est. 2.2%/yr)",fmt(txMo)+"/mo");
-    row("Homeowners insurance (est. 1.2%/yr)",fmt(insMo)+"/mo");
-    if(miMo>0)row("PMI / MIP",fmt(miMo)+"/mo",RED);
-    row("Utilities (estimate)","$240/mo");
-    if(hoa>0)row("HOA fees",fmt(hoa)+"/mo");
-    row("Maintenance reserve (1%/yr)",fmt(maint)+"/mo");
-    safe();
-    fillRect(M,y,CW,7,G1);
-    txt("Total housing (PITI + utils + HOA)",M+2,y+4.5,10,CHR,"bold");
-    txt(fmt(housing)+"/mo",W-M-2,y+4.5,10,CHR,"bold","right");
-    nl(11);
-
-    txt("LIFESTYLE",M,y,9,G5,"bold");nl(5.5);
+    // ── SECTION 3: MONTHLY BUDGET ────────────────────────────────────────────
+    h2("Monthly Budget");
+    row("Gross monthly",fmt(grossMo),[27,107,68]);
+    row("401(k) pre-tax",`- ${fmt(Math.round(d.k401/12))}`,[220,38,38]);
+    row("HSA pre-tax",`- ${fmt(Math.round(d.hsa/12))}`,[220,38,38]);
+    row("Federal tax + FICA",`- ${fmt(taxFICA)}`,[220,38,38]);
+    row("Roth IRA (post-tax)",`- ${fmt(Math.round(d.roth/12))}`,[220,38,38]);
+    row("True spendable take-home",fmt(trueTakeHome),[27,107,68]);
+    nl(2);
+    row(`P&I (${fmt(effLoan)} @ ${ar.toFixed(2)}%)`,fmt(piMo)+"/mo");
+    row("Property tax (2.2%)",fmt(txMo)+"/mo");
+    row("Insurance (1.2%)",fmt(insMo)+"/mo");
+    if(miMo>0)row("PMI / MIP",fmt(miMo)+"/mo");
+    row("Utilities (est.)","$240/mo");
+    if(hoa>0)row("HOA",fmt(hoa)+"/mo");
+    row("Maintenance (1%/yr)",fmt(maint)+"/mo");
     if(d.groc>0)row("Groceries",fmt(d.groc)+"/mo");
     if(d.dining>0)row("Dining out",fmt(d.dining)+"/mo");
     if(d.ent>0)row("Entertainment",fmt(d.ent)+"/mo");
     if(d.pcare>0)row("Personal care",fmt(d.pcare)+"/mo");
     if(d.car>0)row("Car (payment + insurance + gas)",fmt(d.car)+"/mo");
-    if(d.debts>0)row("Other debts (credit cards, loans)",fmt(d.debts)+"/mo",RED);
-    if(d.efund>0)row("Emergency fund contributions",fmt(d.efund)+"/mo",AMB);
-    if(currentRent>0)row("Current rent (while renting)",fmt(currentRent)+"/mo");
+    if(d.debts>0)row("Other debts",fmt(d.debts)+"/mo");
+    if(d.efund>0)row("Emergency fund contributions",fmt(d.efund)+"/mo");
+    row("Monthly buffer",remaining>=0?fmt(remaining)+"/mo":"⚠ Shortfall: "+fmt(Math.abs(remaining))+"/mo",remaining>=300?[27,107,68]:remaining>=0?[146,64,14]:[220,38,38]);
+    check();
 
-    safe();
-    const bufRgb=remaining>=500?GRN:remaining>=0?AMB:RED;
-    const bufBg=remaining>=500?GRNL:remaining>=0?AMBL:REDL;
-    fillRect(M,y,CW,9,bufBg);
-    txt("Monthly buffer",M+2,y+5.5,10.5,bufRgb,"bold");
-    txt((remaining>=0?"+ ":"")+fmt(remaining)+"/mo",W-M-2,y+5.5,10.5,bufRgb,"bold","right");
-    nl(13);
-    if(mccMo>0){
-      safe();
-      fillRect(M,y,CW,6,GRNL);
-      txt("MCC tax credit (at filing)",M+2,y+3.5,10,GRN,"bold");
-      txt(`+ ${fmt(mccMo*12)}/yr saved on federal taxes`,W-M-2,y+3.5,10,GRN,"bold","right");
-      nl(10);
-    }
-
-    // ════════════════════════════════════════════════════════════════════════
-    // WAIT VS BUY
-    // ════════════════════════════════════════════════════════════════════════
-    sectionHead("Wait vs. Buy Analysis","");
+    // ── SECTION 4: WAIT VS BUY ───────────────────────────────────────────────
+    h2("Wait vs. Buy (1-year comparison)");
     const fp1=Math.round(d.price*Math.pow(1.043,1));
     const fp1i=Math.round(mpi(fp1*(1-d.dpPct/100),ar+.1,360)+fp1*.022/12+fp1*.012/12);
-    const colW=(CW-4)/2;
-    safe();
-    // Side-by-side comparison boxes
-    fillRect(M,y,colW,36,GRNL);strokeRect(M,y,colW,36,GRN,0.4);
-    txt("BUY NOW",M+colW/2,y+6,9,GRN,"bold","center");
-    txt(fmt(d.price),M+colW/2,y+14,13,GRN,"bold","center");
-    txt("P&I: "+fmt(piMo)+"/mo",M+colW/2,y+21,9,GRNM,"normal","center");
-    txt("Rate: "+ar.toFixed(2)+"%",M+colW/2,y+27,9,GRNM,"normal","center");
-    txt("Today's opportunity",M+colW/2,y+33,8,[100,170,130],"normal","center");
+    row("Price today",fmt(d.price));
+    row("Estimated price in 1 year (4.3% appreciation)",fmt(fp1),[220,38,38]);
+    row("Price increase if you wait",`+ ${fmt(fp1-d.price)}`,[220,38,38]);
+    row("P&I today",fmt(piMo)+"/mo");
+    row("Estimated P&I in 1 year",fmt(fp1i)+"/mo",[220,38,38]);
+    row("Monthly payment increase",`+ ${fmt(fp1i-piMo)}/mo`,[220,38,38]);
+    row(d.isRenting?`Rent you'd pay while waiting (${fmt(d.monthlyRent)}/mo)`:"Estimated rent while waiting",`- ${fmt(12*(d.isRenting?d.monthlyRent:1500))}`,[220,38,38]);
+    row("Equity you'd build buying now",`+ ${fmt(Math.round(piMo*12*.25))}`,[27,107,68]);
+    check();
 
-    const bx=M+colW+4;
-    fillRect(bx,y,colW,36,REDL);strokeRect(bx,y,colW,36,RED,0.4);
-    txt("WAIT 1 YEAR",bx+colW/2,y+6,9,RED,"bold","center");
-    txt(fmt(fp1),bx+colW/2,y+14,13,RED,"bold","center");
-    txt("P&I: "+fmt(fp1i)+"/mo",bx+colW/2,y+21,9,RED,"normal","center");
-    txt("Rate: ~"+(ar+.1).toFixed(2)+"%",bx+colW/2,y+27,9,RED,"normal","center");
-    txt("+ "+fmt(fp1-d.price)+" more",bx+colW/2,y+33,8,[200,60,60],"normal","center");
-    nl(40);
-
-    row("Monthly payment increase if you wait",`+ ${fmt(fp1i-piMo)}/mo`,RED);
-    row("Price increase if you wait",`+ ${fmt(fp1-d.price)}`,RED);
-    row(d.isRenting?`Rent paid while waiting (${fmt(d.monthlyRent)}/mo)`:"Est. rent while waiting",`- ${fmt(12*(d.isRenting?d.monthlyRent:1500))}`,RED);
-    row("Equity you build by buying now",`+ ${fmtK(piMo*12*.25)} in Year 1`,GRN);
-
-    // ════════════════════════════════════════════════════════════════════════
-    // NEIGHBORHOODS
-    // ════════════════════════════════════════════════════════════════════════
+    // ── SECTION 5: AREAS & SCHOOLS ───────────────────────────────────────────
     const hoods=getNeighborhoods(loc.city);
     if(hoods){
-      sectionHead(`Neighborhood Guide — ${loc.city}`,"");
-      hoods.forEach((h,i)=>{
-        safe();
-        const schoolColor=h.schools>=8?GRN:h.schools>=6?AMB:RED;
-        fillRect(M,y-1,CW,5,i%2===0?G1:[248,250,252]);
-        txt(h.name,M+2,y+2.5,10,CHR,"bold");
-        txt(`Schools: ${h.schools}/10`,W-M-2,y+2.5,10,schoolColor,"bold","right");
-        nl(6);
-        txt(`${h.medianPrice}  |  ${h.commute}`,M+2,y,9,G5,"normal");
-        nl(5);
-        const lh=wrap(h.notes,M+2,y,CW-4,9,G7,"normal",4.2);
-        nl(lh+3);
+      h2("Neighborhood Guide — "+loc.city);
+      hoods.forEach(h=>{
+        check();
+        doc.setFont("helvetica","bold");doc.setFontSize(9);doc.setTextColor(44,44,44);doc.text(h.name,M,y);
+        doc.setFont("helvetica","normal");doc.setTextColor(107,114,128);doc.text(`Schools: ${h.schools}/10  |  Median: ${h.medianPrice}  |  ${h.commute}`,M+40,y);
+        nl(4);
+        body(h.notes,[107,114,128]);
       });
     }
+    check();
 
-    // ════════════════════════════════════════════════════════════════════════
-    // CLIMATE RISK
-    // ════════════════════════════════════════════════════════════════════════
+    // ── SECTION 6: CLIMATE RISKS ─────────────────────────────────────────────
     const climate=getClimate(loc.state);
     if(climate){
-      sectionHead(`Climate Risk — ${loc.state}`,"");
-      wrap(`Always verify flood zone at msc.fema.gov for ZIP ${loc.zip||"your area"} before purchasing. Get insurance quotes before making any offer.`,M,y,CW,10,AMB,"normal",4.8);
-      nl(10);
-      const riskColor=(r)=>r==="Extreme"||r==="Very High"?RED:r==="High"?AMB:r==="Moderate"||r==="Low-Moderate"?GRNM:GRN;
-      const riskBg=(r)=>r==="Extreme"||r==="Very High"?REDL:r==="High"?AMBL:GRNL;
+      h2("Climate Risk Overview — "+loc.state);
+      body(`Always verify flood zone at msc.fema.gov for ZIP ${loc.zip} before purchasing. Get insurance quotes before making any offer.`);
       Object.entries(climate).filter(([,v])=>v.risk!=="None").forEach(([key,val])=>{
-        safe();
-        fillRect(M,y-1,CW,6,riskBg(val.risk));
-        txt(`${key.charAt(0).toUpperCase()+key.slice(1)} Risk`,M+2,y+3,10,riskColor(val.risk),"bold");
-        txt(val.risk,W-M-2,y+3,10,riskColor(val.risk),"bold","right");
-        nl(7);
-        const lh=wrap(val.detail,M+2,y,CW-4,9,G7,"normal",4.2);
-        nl(lh+4);
+        check();
+        doc.setFont("helvetica","bold");doc.setFontSize(9);doc.setTextColor(44,44,44);doc.text(`${val.icon} ${key.charAt(0).toUpperCase()+key.slice(1)} Risk: ${val.risk}`,M,y);nl(4);
+        body(val.detail);
       });
     }
+    check();
 
-    // ════════════════════════════════════════════════════════════════════════
-    // ACTION PLAN — all 3 timelines
-    // ════════════════════════════════════════════════════════════════════════
+    // ── SECTION 7: ACTION PLAN ───────────────────────────────────────────────
     const cl=generateChecklist(d,loc);
-    const tlColors={
-      "3mo":RED,
-      "6mo":AMB,
-      "12mo":GRN,
-    };
-    const tlBg={
-      "3mo":REDL,
-      "6mo":AMBL,
-      "12mo":GRNL,
-    };
-    ["3mo","6mo","12mo"].forEach(tlKey=>{
-      const cur=cl[tlKey];
-      const accent=tlColors[tlKey];
-      const bg=tlBg[tlKey];
-      safe();
-      fillRect(0,y-2,W,10,bg);
-      doc.setDrawColor(...accent);doc.setLineWidth(1.5);doc.line(0,y-2,0,y+8);
-      txt(cur.label,M,y+4,11,accent,"bold");
-      txt(cur.desc,W-M,y+4,9,G5,"normal","right");
-      nl(14);
-
-      const urgentTasks=cur.tasks.filter(t=>t.urgent);
-      const otherTasks=cur.tasks.filter(t=>!t.urgent);
-
-      if(urgentTasks.length){
-        safe();
-        // Priority group label — pill badge style
-        fillRect(M,y,32,5.5,REDL);
-        txt("PRIORITY",M+3,y+3.8,6.5,RED,"bold");
-        nl(8);
-        urgentTasks.forEach(task=>taskRow(task,RED));
-        nl(3);
-      }
-
-      if(otherTasks.length){
-        safe();
-        fillRect(M,y,22,5.5,G1);
-        txt("TO DO",M+3,y+3.8,6.5,G7,"bold");
-        nl(8);
-        otherTasks.forEach(task=>taskRow(task,[180,186,194]));
-      }
-      nl(6);
-    });
-
-    // ════════════════════════════════════════════════════════════════════════
-    // NEGOTIATION GUIDE
-    // ════════════════════════════════════════════════════════════════════════
-    sectionHead("Negotiation Guide","");
-    wrap("Everything below is negotiable — most buyers leave money on the table by not asking. Your agent works for you; these are the levers you control.",M,y,CW,10,G7,"normal",4.8);
-    nl(12);
-
-    const negSections=[
-      {title:"Purchase Price",items:[
-        "List price is a starting point, not the final number. Comparable sales (comps) determine market value.",
-        "In a buyer's market: offer 3–8% below list. In a hot market: offer at or above list.",
-        `At ${fmt(d.price)} list, a 3% reduction saves you ${fmt(d.price*.03)} upfront.`,
-        "Ask your agent to pull comps from the past 90 days within a 0.5-mile radius before writing any offer.",
-      ]},
-      {title:"Seller Concessions (Closing Costs)",items:[
-        "You can ask the seller to pay some or all of your closing costs — called a seller concession.",
-        `Closing costs on a ${fmt(d.price)} home run ~${fmt(d.price*.03)}. Asking for 2–3% concession is common.`,
-        "FHA allows up to 6% in seller concessions. Conventional allows up to 3% (under 10% down) or 9% (10%+ down).",
-        "Framing it as 'net price' works better than asking for a discount — seller nets the same, you get cash at closing.",
-      ]},
-      {title:"Repairs After Inspection",items:[
-        "After the inspection, you can request repairs, a price reduction, or a repair credit at closing.",
-        "Repair credits are often better — you control the contractor and the quality of work.",
-        "Focus on health/safety issues (roof, electrical, plumbing, HVAC) — not cosmetic items.",
-        "If the seller won't budge on repairs, factor the repair cost into your offer price.",
-      ]},
-      {title:"Closing Date & Possession",items:[
-        "Sellers often value a flexible closing date as much as a higher price.",
-        "If a seller needs more time, offer a leaseback — they rent from you post-closing.",
-        "If you need speed, a 21-day close can beat a higher offer from a buyer needing 45 days.",
-        "If the seller wants 30–60 days post-close possession, charge fair market rent.",
-      ]},
-      {title:"Home Warranty",items:[
-        "Ask the seller to provide a 1-year home warranty ($400–700). Low cost to them, high value to you.",
-        "Covers HVAC, plumbing, electrical, and appliances for the first year — when surprises are most likely.",
-        "If they decline, ask your agent to cover it as a buyer's closing gift — many do.",
-      ]},
-      {title:"Appliances & Fixtures",items:[
-        "Permanently attached items (built-in appliances, light fixtures, blinds) convey with the home by default.",
-        "Freestanding appliances (washer, dryer, fridge) do NOT transfer unless you ask.",
-        "Ask for everything you want in writing in the contract. Verbal agreements don't hold.",
-        "If the seller won't leave the fridge, ask for a $500–800 appliance credit instead.",
-      ]},
-      {title:"Earnest Money Deposit",items:[
-        "Earnest money (1–3% of price) shows commitment. The amount is negotiable.",
-        "Make sure your contract has strong contingencies: financing, inspection, and appraisal.",
-        "An appraisal contingency protects you if the home appraises below purchase price.",
-        "In a competitive market, a larger EMD (3%+) signals seriousness without raising your offer price.",
-      ]},
-      {title:"Rate Buydown (Seller-Paid Points)",items:[
-        "Ask the seller to pay points to permanently or temporarily buy down your interest rate.",
-        `At ${ar.toFixed(2)}%, buying down 0.5% costs ~${fmt(d.price*.01)} and saves ~${fmt(Math.round(mpi(effLoan,ar-.5,360)-mpi(effLoan,ar,360)))}/mo for the life of the loan.`,
-        "A 2-1 buydown costs ~2–3% of the loan — sellers sometimes pay this to close a deal.",
-        "Most powerful in a high-rate environment where buyers are rate-sensitive.",
-      ]},
-      {title:"HOA & Transfer Fees",items:[
-        "HOA transfer fees ($200–500+) are negotiable — ask the seller to pay them.",
-        "Review the HOA's financials and reserve fund before closing. Underfunded HOAs lead to special assessments.",
-        "Ask for all HOA docs (CC&Rs, bylaws, meeting minutes, financials) at least 7 days before closing.",
-        "Pending litigation or deferred maintenance is a negotiating point on price.",
-      ]},
-    ];
-
-    negSections.forEach((sec,si)=>{
-      safe();
-      fillRect(M,y-1,CW,6,si%2===0?G1:[248,250,252]);
-      doc.setDrawColor(...GRN);doc.setLineWidth(0.8);doc.line(M,y-1,M,y+5);
-      txt(sec.title,M+4,y+3,10,CHR,"bold");
-      nl(8);
-      sec.items.forEach(item=>{
-        safe();
-        // Bullet dot positioned at the hanging indent column
-        doc.setFillColor(...GRNM);doc.circle(M+3,y-0.5,1.2,"F");
-        // Text starts at M+8, maxW shrinks accordingly so wrapped lines stay aligned
-        const lh=wrap(item,M+8,y,CW-10,10,G7,"normal",4.8);
-        nl(lh+3);
+    ["3mo","6mo","12mo"].forEach(tl=>{
+      check();
+      const cur=cl[tl];
+      h2(`Action Plan — ${cur.label}`);
+      body(cur.desc);
+      cur.tasks.forEach(task=>{
+        check();
+        doc.setFont("helvetica","normal");doc.setFontSize(8);doc.setTextColor(task.urgent?[220,38,38][0]:107,task.urgent?[220,38,38][1]:114,task.urgent?[220,38,38][2]:128);
+        const mark=task.urgent?"⚡ ":"· ";
+        const wrapped=doc.splitTextToSize(mark+task.text,CW-4);
+        doc.text(wrapped,M+3,y);nl(wrapped.length*3.8+1);
       });
-      nl(3);
     });
 
-    addFooters();
+    // Footer
+    const pages=doc.getNumberOfPages();
+    for(let i=1;i<=pages;i++){
+      doc.setPage(i);doc.setFont("helvetica","normal");doc.setFontSize(7);doc.setTextColor(156,163,175);
+      doc.text(`Bread Crumbs · breadcrumbs.app · Generated ${new Date().toLocaleDateString()}`,W/2,290,{align:"center"});
+      doc.text(`Page ${i} of ${pages}`,W-M,290,{align:"right"});
+    }
     doc.save(`breadcrumbs-${loc.zip||"report"}.pdf`);
   };
 
@@ -2278,11 +1855,12 @@ function StepResults({data,onBack,onNext,onRestart,programs:allP=[]}){
   );
 }
 
-function StepUnderwriting({data,onNext,onBack,programs:allP=[]}){
+function StepUnderwriting({data,onNext,onBack}){
   const d=data;
+  const loc=d.locationInfo||{};
   const grossMo=Math.round((d.income+(d.alimony||0))/12);
-  const progMap=useMemo(()=>new Map(allP.map(p=>[p.id,p])),[allP]);
-  const totalAssist=useMemo(()=>d.programs.reduce((s,id)=>{const p=progMap.get(id);return p?s+p.calc(d.price):s;},0),[d.programs,d.price,progMap]);
+  const allP=getProgramsForLocation(loc.state,loc.city,loc.county,d.profession,d.isVet,d.income,d.householdSize||1);
+  const totalAssist=allP.filter(p=>d.programs.includes(p.id)).reduce((s,p)=>s+p.calc(d.price),0);
   const dp=d.price*d.dpPct/100;
   const fhaUp=d.loanType==="fha"?(d.price-dp)*0.0175:0;
   const cashNeeded=dp+d.price*0.03+1000+fhaUp;
@@ -2393,17 +1971,14 @@ const DEFAULT={
 
 export default function App(){
   const [step,setStep]=useState(1);
-  const [maxStep,setMaxStep]=useState(1);
   const [data,setData]=useState(DEFAULT);
-  const [hoveredStep,setHoveredStep]=useState(null);
-  const goTo=s=>{setStep(s);if(s>maxStep)setMaxStep(s);window.scrollTo(0,0);};
-  const{programs,loading:progsLoading}=usePrograms(data.locationInfo||{},data);
+  const goTo=s=>{setStep(s);window.scrollTo(0,0);};
   return(
     <div style={{background:C.cream,minHeight:"100vh",fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",color:C.charcoal}}>
       <div style={{background:C.white,borderBottom:`1px solid ${C.gray100}`,padding:"12px 16px",position:"sticky",top:0,zIndex:100}}>
         <div style={{maxWidth:600,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <img src="/logo.png" alt="Bread Crumbs" style={{height:28,width:"auto",display:"block"}}/>
+            <span style={{fontSize:22}}>🍞</span>
             <span style={{fontSize:18,fontWeight:900,color:C.green,letterSpacing:"-0.02em"}}>Bread Crumbs</span>
           </div>
           <div style={{fontSize:11,color:C.gray500,fontWeight:600}}>Step {step} of {STEPS.length}</div>
@@ -2413,51 +1988,30 @@ export default function App(){
         <div style={{maxWidth:600,margin:"0 auto"}}>
           <div style={{display:"flex",alignItems:"center"}}>
             {STEPS.map((s,i)=>(
-              <div key={s.id} style={{display:"flex",alignItems:"center",flex:i<STEPS.length-1?1:0,position:"relative"}}>
-                <div
-                  onClick={()=>s.id<=maxStep&&goTo(s.id)}
-                  onMouseEnter={()=>s.id<=maxStep&&setHoveredStep(s.id)}
-                  onMouseLeave={()=>setHoveredStep(null)}
-                  style={{
-                    width:28,height:28,borderRadius:"50%",
-                    display:"flex",alignItems:"center",justifyContent:"center",
-                    fontSize:s.id<=step?13:11,flexShrink:0,fontWeight:700,
-                    // background: completed=green, current=green, unlocked-future=white, locked=gray
-                    background:s.id<step?C.green:s.id===step?C.green:s.id<=maxStep?C.white:C.gray100,
-                    // color: completed/current=white, unlocked-future=green, locked=gray
-                    color:s.id<=step?C.white:s.id<=maxStep?C.green:C.gray500,
-                    // border: current=thick green, unlocked-future=thin green, others=none
-                    border:s.id===step?`3px solid ${C.greenMid}`:s.id<=maxStep&&s.id!==step?`2px solid ${C.green}`:"none",
-                    boxShadow:s.id===step?`0 0 0 3px ${C.greenLight}`:"none",
-                    cursor:s.id<=maxStep?"pointer":"default",
-                    pointerEvents:s.id>maxStep?"none":"auto",
-                    transition:"background 0.15s,border 0.15s",
-                  }}>
+              <div key={s.id} style={{display:"flex",alignItems:"center",flex:i<STEPS.length-1?1:0}}>
+                <div onClick={()=>s.id<step&&goTo(s.id)} title={s.label}
+                  style={{width:28,height:28,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:s.id<=step?13:11,background:s.id<step?C.green:s.id===step?C.green:C.gray100,color:s.id<=step?C.white:C.gray500,fontWeight:700,cursor:s.id<step?"pointer":"default",flexShrink:0,border:s.id===step?`3px solid ${C.greenMid}`:"none",boxShadow:s.id===step?`0 0 0 3px ${C.greenLight}`:"none"}}>
                   {s.id<step?"✓":s.icon}
                 </div>
-                {hoveredStep===s.id&&(
-                  <div style={{position:"absolute",top:34,left:"50%",transform:"translateX(-50%)",background:C.charcoal,color:C.white,fontSize:10,fontWeight:600,padding:"3px 9px",borderRadius:6,whiteSpace:"nowrap",zIndex:200,pointerEvents:"none",boxShadow:"0 2px 8px rgba(0,0,0,0.18)"}}>
-                    {s.label}
-                  </div>
-                )}
                 {i<STEPS.length-1&&<div style={{flex:1,height:2,background:s.id<step?C.green:C.gray100,margin:"0 2px"}}/>}
               </div>
             ))}
           </div>
+          <div style={{marginTop:5,textAlign:"center",fontSize:11,color:C.gray500,fontWeight:600}}>{STEPS[step-1].label}</div>
         </div>
       </div>
       <div style={{maxWidth:600,margin:"0 auto",padding:"16px 14px 40px"}}>
         <div style={{marginBottom:14}}>
           <div style={{fontSize:22,fontWeight:900,color:C.charcoal,letterSpacing:"-0.02em"}}>{STEPS[step-1].icon} {STEPS[step-1].title}</div>
         </div>
-        {step===1&&<StepLocation data={data} setData={setData} onNext={()=>goTo(2)} programs={programs}/>}
+        {step===1&&<StepLocation data={data} setData={setData} onNext={()=>goTo(2)}/>}
         {step===2&&<StepIncome data={data} setData={setData} onNext={()=>goTo(3)} onBack={()=>goTo(1)}/>}
         {step===3&&<StepHome data={data} setData={setData} onNext={()=>goTo(4)} onBack={()=>goTo(2)}/>}
         {step===4&&<StepLoan data={data} setData={setData} onNext={()=>goTo(5)} onBack={()=>goTo(3)}/>}
-        {step===5&&<StepPrograms data={data} setData={setData} onNext={()=>goTo(6)} onBack={()=>goTo(4)} programs={programs} progsLoading={progsLoading}/>}
+        {step===5&&<StepPrograms data={data} setData={setData} onNext={()=>goTo(6)} onBack={()=>goTo(4)}/>}
         {step===6&&<StepBudget data={data} setData={setData} onNext={()=>goTo(7)} onBack={()=>goTo(5)}/>}
-        {step===7&&<StepUnderwriting data={data} onNext={()=>goTo(8)} onBack={()=>goTo(6)} programs={programs}/>}
-        {step===8&&<StepResults data={data} onBack={()=>goTo(7)} onNext={()=>goTo(9)} onRestart={()=>{setData(DEFAULT);goTo(1);}} programs={programs}/>}
+        {step===7&&<StepUnderwriting data={data} onNext={()=>goTo(8)} onBack={()=>goTo(6)}/>}
+        {step===8&&<StepResults data={data} onBack={()=>goTo(7)} onNext={()=>goTo(9)} onRestart={()=>{setData(DEFAULT);goTo(1);}}/>}
         {step===9&&<StepChecklist data={data} setData={setData} onNext={()=>goTo(9)} onBack={()=>goTo(8)}/>}
       </div>
     </div>
