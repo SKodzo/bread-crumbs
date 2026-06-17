@@ -26,10 +26,9 @@ function getProgramsData(state, city, county, profession, isVet, income, househo
   progs.push(p({ id: "nfmc", name: "NeighborWorks / NHS DPA", short: "Up to $15K DPA, flexible income limits", amount: "Up to $15K", badge: "Nonprofit", layer: "heroes", calcSpec: fixed(15000), note: "National nonprofit network. No strict AMI cap in many markets. Credit as low as 580. Search nw.org for local affiliate.", url: "https://www.nw.org" }));
 
   if (st === "TX") {
-    progs.push(p({ id: "tsahc", name: "TSAHC Home Sweet Texas", short: "Up to 5% DPA grant, no repayment", amount: "Up to 5%", badge: "State", layer: "state", calcSpec: pct(0.05), incompat: ["tdhca"], note: "Income limit varies by county. tsahc.org", url: "https://www.tsahc.org" }));
-    progs.push(p({ id: "tdhca", name: "My First Texas Home (TDHCA)", short: "5% DPA + below-market rate", amount: "5% of loan", badge: "State", layer: "state", calcSpec: pct(0.05), incompat: ["tsahc"], note: "30-yr fixed below-market rate. tdhca.state.tx.us", url: "https://www.tdhca.texas.gov" }));
+    progs.push(p({ id: "tsahc", name: "TSAHC Home Sweet Texas", short: "Up to 5% DPA grant, no repayment", amount: "Up to 5%", badge: "State", layer: "state", calcSpec: pct(0.05), incompat: ["tdhca","tsahc_heroes"], note: "Income limit varies by county. tsahc.org", url: "https://www.tsahc.org" }));
+    progs.push(p({ id: "tdhca", name: "TDHCA Home Loan Programs", short: "5% DPA + below-market rate · first-time & repeat buyers", amount: "5% of loan", badge: "State", layer: "state", calcSpec: pct(0.05), incompat: ["tsahc","tsahc_heroes"], note: "My First Texas Home (first-time buyers) & My Choice Texas Home (repeat buyers OK). 30-yr fixed below-market rate. $122,100 income limit. 620+ FICO. tdhca.state.tx.us", url: "https://www.tdhca.texas.gov" }));
     progs.push(p({ id: "mcc_tx", name: "Texas MCC", short: "15% of interest back as tax credit/yr", amount: "~$1,400+/yr", badge: "Federal", layer: "federal", note: "Reinstated March 2026. First-time buyers only.", url: "https://www.tsahc.org", expires: "Reinstated Mar 2026 — verify active" }));
-    progs.push(p({ id: "mychoicetx", name: "TDHCA My Choice Texas Home", short: "5% DPA, statewide, repeat buyers OK", amount: "5% of loan", badge: "State", layer: "state", calcSpec: pct(0.05), note: "Statewide TDHCA program. Unlike My First Texas Home, repeat buyers are eligible. $122,100 income limit. 620+ FICO. 30-yr fixed below-market rate.", url: "https://www.tdhca.texas.gov/homeownership/mychoice/" }));
     progs.push(p({ id: "chenoa", name: "Chenoa Fund", short: "3.5–5% DPA nationally, no AMI cap", amount: "3.5–5%", badge: "National", layer: "federal", calcSpec: pct(0.035), note: "National program via CBC Mortgage Agency. No income limit. 600+ FICO (620+ for best terms). Repeat buyers OK. FHA-backed DPA — forgivable or repayable options. chenoafund.org", url: "https://chenoafund.org" }));
 
     if (co.includes("harris") || co.includes("fort bend") || co.includes("montgomery") || co.includes("brazoria") || co.includes("galveston") || co.includes("liberty") || co.includes("chambers") || co.includes("waller")) {
@@ -141,7 +140,7 @@ function getProgramsData(state, city, county, profession, isVet, income, househo
 
   if (st === "TX" && isHero) {
     const heroLabel = isTeacher ? "teachers" : isFirstResp ? "firefighters/EMS" : isLawEnf ? "law enforcement" : isHealth ? "nurses/allied health" : "public service employees";
-    progs.push(p({ id: "tsahc_heroes", name: "TSAHC Homes for Texas Heroes", short: `5% DPA grant for ${heroLabel}`, amount: "5% grant", badge: "State", layer: "heroes", calcSpec: pct(0.05), note: `TSAHC Heroes program for ${heroLabel}. Stackable with Texas MCC. Income limits vary by county. tsahc.org`, url: "https://www.tsahc.org/homebuyers/" }));
+    progs.push(p({ id: "tsahc_heroes", name: "TSAHC Homes for Texas Heroes", short: `5% DPA grant for ${heroLabel}`, amount: "5% grant", badge: "State", layer: "heroes", calcSpec: pct(0.05), incompat: ["tsahc","tdhca"], note: `TSAHC Heroes program for ${heroLabel}. Stackable with Texas MCC. Income limits vary by county. tsahc.org`, url: "https://www.tsahc.org/homebuyers/" }));
   }
 
   if (st === "GA" && (isTeacher || isFirstResp || isLawEnf || isHealth)) {
