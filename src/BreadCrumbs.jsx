@@ -23,7 +23,7 @@ function getLoanRec(score,dpPct,isVet){
   return{type:"fha",reason:`With ${dpPct}% down and a ${score} score, FHA's minimum requirements and flexible guidelines are your best entry point.`};
 }
 
-export const ZIP_DB={
+const ZIP_DB={
   "77001":["TX","Houston","Harris"],"77002":["TX","Houston","Harris"],"77003":["TX","Houston","Harris"],
   "77004":["TX","Houston","Harris"],"77005":["TX","Houston","Harris"],"77006":["TX","Houston","Harris"],
   "77007":["TX","Houston","Harris"],"77008":["TX","Houston","Harris"],"77009":["TX","Houston","Harris"],
@@ -1969,7 +1969,7 @@ const DEFAULT={
   householdSize:1,student:0,
 };
 
-export function BuyingApp({onHome}={}){
+export default function App(){
   const [step,setStep]=useState(1);
   const [data,setData]=useState(DEFAULT);
   const goTo=s=>{setStep(s);window.scrollTo(0,0);};
@@ -1978,7 +1978,6 @@ export function BuyingApp({onHome}={}){
       <div style={{background:C.white,borderBottom:`1px solid ${C.gray100}`,padding:"12px 16px",position:"sticky",top:0,zIndex:100}}>
         <div style={{maxWidth:600,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
-            {onHome&&<button onClick={onHome} style={{background:"none",border:"none",color:C.gray500,fontSize:13,cursor:"pointer",padding:"4px 6px",borderRadius:6,marginRight:4}}>← Home</button>}
             <span style={{fontSize:22}}>🍞</span>
             <span style={{fontSize:18,fontWeight:900,color:C.green,letterSpacing:"-0.02em"}}>Bread Crumbs</span>
           </div>
