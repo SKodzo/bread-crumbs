@@ -23,7 +23,7 @@ function getLoanRec(score,dpPct,isVet){
   return{type:"fha",reason:`With ${dpPct}% down and a ${score} score, FHA's minimum requirements and flexible guidelines are your best entry point.`};
 }
 
-const ZIP_DB={
+export const ZIP_DB={
   "77001":["TX","Houston","Harris"],"77002":["TX","Houston","Harris"],"77003":["TX","Houston","Harris"],
   "77004":["TX","Houston","Harris"],"77005":["TX","Houston","Harris"],"77006":["TX","Houston","Harris"],
   "77007":["TX","Houston","Harris"],"77008":["TX","Houston","Harris"],"77009":["TX","Houston","Harris"],
