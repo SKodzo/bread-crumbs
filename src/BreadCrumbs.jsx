@@ -1969,6 +1969,7 @@ const DEFAULT={
   householdSize:1,student:0,
 };
 
+export function BuyingApp(props){ return <App {...props} />; }
 export default function App(){
   const [step,setStep]=useState(1);
   const [data,setData]=useState(DEFAULT);
